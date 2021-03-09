@@ -1,4 +1,4 @@
-#inbuilt modules
+#inport modules
 import subprocess
 import sys
 import math
@@ -41,6 +41,35 @@ from BaselineRemoval import BaselineRemoval
 # Define all function used in the program
 
 # Processing
+def quickProcess(file_paths, sample_type):
+    WN, array, sample_ID = readArrayFromFile(file_paths, sample_type)
+    df = readArrayToDataFrame(array, 'Raw_array')
+    df['Sample_type'] = sample_ID
+    df = addColumnToDataFrame(df,
+                              smooth(df['Raw_array'],
+                                     method = 'FFT',
+                                     fourior_values = 250),
+                              'Smoothed_array')
+    df = addColumnToDataFrame(df,
+                              normalise(df['Smoothed_array'],
+                                        method = 'interp_area',
+                                        normalisation_indexs = (895,901)),
+                              'Normalized_array')
+    df = addColumnToDataFrame(df,
+                              baselineCorrection(df['Normalized_array'],
+                                                 lam=10**5),
+                              'Baseline_corrected_array')
+    df = addColumnToDataFrame(df,
+                              removeCosmicRaySpikes(df['Baseline_corrected_array'],
+                                                    threshold = 5),
+                              'Despiked_array')
+    df = addColumnToDataFrame(df,
+                              normalise(df['Despiked_array'],
+                                        method = 'interp_area',
+                                        normalisation_indexs = (895,901)),
+                              'Baseline_corrected_normalized_array')
+    return df
+
 def readArrayFromFile(file, sample_ID):
     # Opens a file and reads the content into an array of spectras and corrisponding wavnumbers
     # (can accept both single file names and lists of files)
@@ -439,7 +468,7 @@ def dispayCVResults(Result_dictionary):
     plt.title('Predictive Power of Different Modles for Seperating Raman Data')
     plt.show()
 
-def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn):
+def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,print_plot=True):
     colours = ['k','r','b','g','m']
     index = 0
     for spectra_class in spectra_ids:
@@ -456,9 +485,25 @@ def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn):
     plt.ylabel('Intencity (AU)')
     plt.autoscale(enable=True, axis='x', tight=True)
     plt.legend(spectra_ids)
-    plt.show()
+    if print_plot == True:
+        plt.show()
+    
+def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,print_plot=True):
+    spectra_ids = [i for i in spectra_ids]
+    plt.plot(x_axis,
+             np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[0])][str(column)]),axis=0))-np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[1])][str(column)]),axis=0)),
+             c='k')
+    plt.plot(x_axis,
+             np.zeros(np.shape(np.stack(data_frame[str(column)]))[1]),
+             '--k')
+    plt.title('Difference Spectra')
+    plt.xlabel('Wavenumbers (CM$^{-1}$)')
+    plt.ylabel('Intencity (AU)')
+    plt.autoscale(enable=True, axis='x', tight=True)
+    if print_plot == True:
+        plt.show()
 
-def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,PCs_plot=(0,1)):
+def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,PCs_plot=(0,1),print_plot=True):
     colours = ['k','r','b','g','m']
     index = 0
     pca = PCA(n_components=principal_components)
@@ -472,4 +517,24 @@ def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_co
     plt.xlabel('Principal component ' + str(PCs_plot[0]+1))
     plt.ylabel('Principal component ' + str(PCs_plot[1]+1))
     plt.legend(spectra_ids)
-    plt.show()
+    if print_plot == True:
+        plt.show()
+    
+#def analyisePipeline(data_frame,classifier_lables,PCA=False,principal_components=10):
+#    for column in data_frame:
+#        array = np.stack(data_frame[column])
+#    
+#        if PCA == False:
+#            X = array
+#            y = classifier_lables
+#            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+#            X_train_2 = X_train
+#            X_test_2 = X_test
+#        else:
+#            X = array
+#            y = classifier_lables
+#            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+#            pca = PCA(n_components=principal_components)
+#            pca.fit(X_train)
+#            X_train_2 = pca.transform(X_train)
+#            X_test_2 = pca.transform(X_test)
