@@ -1,5 +1,9 @@
 # WiER2-Processor
 
+**Disclamer**
+
+This repository is a work in prgress and is intened for internal use only.
+
 **Instaliation**
 
 Make sure you have python 3.7 installed
