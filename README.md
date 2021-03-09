@@ -1,10 +1,10 @@
 # WiER2-Processor
 
-**Disclamer**
+**Disclaimer**
 
-This repository is a work in prgress and is intened for internal use only.
+This repository is a work in progress and is intended for internal use only.
 
-**Instaliation**
+**Installation**
 
 Make sure you have python 3.7 installed
 
@@ -16,9 +16,8 @@ Open the command prompt navigate to the main folder and run:
 pip install -r requirements.txt
 ```
 
-Once install open an instance of jupyter notbook:
+Once install open an instance of jupyter notebook:
 
 ```console
 jupyter notebook
 ```
-
