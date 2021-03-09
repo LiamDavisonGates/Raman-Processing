@@ -16,8 +16,12 @@ Open the command prompt navigate to the main folder and run:
 pip install -r requirements.txt
 ```
 
+**Use**
+
 Once install open an instance of jupyter notebook:
 
 ```console
 jupyter notebook
 ```
+
+Navigate to the main folder and open the 'Demo Raman Processing Notebook'
