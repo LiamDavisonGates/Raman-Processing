@@ -131,95 +131,38 @@ def smooth(array, method = 'Savitzky–Golay', window = 3, polynomial = 0, axis 
             smoothed_array[:,spectra] = np.fft.irfft(rft)[100:-100]
         return smoothed_array
 
-def normaliseArray(array, axis = 1, method = 'max_within_range', normalisation_indexs = (890,910), column_name=False):
-    if type(array) == pd.DataFrame:
-        if column_name == False:
-            print('Error no column name specified for dataframe')
-        else:
-            array = np.transpose(np.stack(array[column_name]))
-            normalised_array = np.zeros(np.shape(array))
-            for spectra in range(np.shape(array)[axis]):
-                if method == 'max_within_range':
-                    max_value = max(array[normalisation_indexs[0]:normalisation_indexs[1],spectra])
-                    normalised_array[:,spectra] = array[:,spectra] / max_value
-                elif method == 'max_whole_array':
-                    max_value = max(array[:,spectra])
-                    normalised_array[:,spectra] = array[:,spectra] / max_value
-                elif method == 'singel_point':
-                    normalised_array[:,spectra] = array[:,spectra] / array[normalisation_indexs[0],spectra]
-                elif method == 'area':
-                    max_value = sum(array[normalisation_indexs[0]:normalisation_indexs[1],spectra])
-                    normalised_array[:,spectra] = array[:,spectra] / max_value
-                elif method == 'interp_area':
-                    f = interpolate.interp1d(range((normalisation_indexs[1]-normalisation_indexs[0])),
-                                             array[normalisation_indexs[0]:normalisation_indexs[1],spectra],
-                                             kind='quadratic')
-                    normalised_array[:,spectra] = array[:,spectra] / sum(f(np.arange(0, (normalisation_indexs[1]-normalisation_indexs[0])-1, 0.1)))
-            if method == 'area':
-                max_value = np.max(normalised_array[normalisation_indexs[0]:normalisation_indexs[1],:])
-                normalised_array = normalised_array / max_value
-            elif method == 'interp_area':
-                max_value = np.max(normalised_array[normalisation_indexs[0]:normalisation_indexs[1],:])
-                normalised_array = normalised_array / max_value
-            else:
-                pass
-            return addColumnToDataFrame(array, normalised_array, 'Normalized', axis = axis)
-    elif type(array) == np.ndarray:
-        normalised_array = np.zeros(np.shape(array))
-        for spectra in range(np.shape(array)[axis]):
-            if method == 'max_within_range':
-                max_value = max(array[normalisation_indexs[0]:normalisation_indexs[1],spectra])
-                normalised_array[:,spectra] = array[:,spectra] / max_value
-            elif method == 'max_whole_array':
-                max_value = max(array[:,spectra])
-                normalised_array[:,spectra] = array[:,spectra] / max_value
-            elif method == 'singel_point':
-                normalised_array[:,spectra] = array[:,spectra] / array[normalisation_indexs[0],spectra]
-            elif method == 'area':
-                max_value = sum(array[normalisation_indexs[0]:normalisation_indexs[1],spectra])
-                normalised_array[:,spectra] = array[:,spectra] / max_value
-            elif method == 'interp_area':
-                f = interpolate.interp1d(range((normalisation_indexs[1]-normalisation_indexs[0])),
-                                         array[normalisation_indexs[0]:normalisation_indexs[1],spectra],
-                                         kind='quadratic')
-                normalised_array[:,spectra] = array[:,spectra] / sum(f(np.arange(0, (normalisation_indexs[1]-normalisation_indexs[0])-1, 0.1)))
-        if method == 'area':
-            max_value = np.max(normalised_array[normalisation_indexs[0]:normalisation_indexs[1],:])
-            normalised_array = normalised_array / max_value
-        elif method == 'interp_area':
-            max_value = np.max(normalised_array[normalisation_indexs[0]:normalisation_indexs[1],:])
-            normalised_array = normalised_array / max_value
-        else:
-            pass
-        return normalised_array
-    
-def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs = (890,910), column_name=False):
+def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs = [890,910], wavenumbers=False):
     array = np.transpose(np.stack(array))
     normalised_array = np.zeros(np.shape(array))
+    normalisation_indexs_2 = normalisation_indexs
+    if type(wavenumbers) == np.ndarray:
+        normalisation_indexs_2[0] = np.absolute(wavenumbers - normalisation_indexs[0]).argmin()
+        normalisation_indexs_2[1] = np.absolute(wavenumbers - normalisation_indexs[1]).argmin()
+    normalisation_indexs_2 = sorted(normalisation_indexs_2)
     for spectra in range(np.shape(array)[axis]):
         if method == 'max_within_range':
-            max_value = max(array[normalisation_indexs[0]:normalisation_indexs[1],spectra])
+            max_value = max(array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra])
             normalised_array[:,spectra] = array[:,spectra] / max_value
         elif method == 'max_whole_array':
             max_value = max(array[:,spectra])
             normalised_array[:,spectra] = array[:,spectra] / max_value
         elif method == 'singel_point':
-            normalised_array[:,spectra] = array[:,spectra] / array[normalisation_indexs[0],spectra]
+            normalised_array[:,spectra] = array[:,spectra] / array[normalisation_indexs_2[0],spectra]
         elif method == 'area':
-            max_value = sum(array[normalisation_indexs[0]:normalisation_indexs[1],spectra])
+            max_value = sum(array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra])
             normalised_array[:,spectra] = array[:,spectra] / max_value
         elif method == 'interp_area':
-            f = interpolate.interp1d(range((normalisation_indexs[1]-normalisation_indexs[0])),
-                                     array[normalisation_indexs[0]:normalisation_indexs[1],spectra],
+            f = interpolate.interp1d(range((normalisation_indexs_2[1]-normalisation_indexs_2[0])),
+                                     array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra],
                                      kind='quadratic')
             normalised_array[:,spectra] = array[:,spectra] / sum(f(np.arange(0,
-                                                                (normalisation_indexs[1]-normalisation_indexs[0])-1,
+                                                                (normalisation_indexs_2[1]-normalisation_indexs_2[0])-1,
                                                                  0.1)))
     if method == 'area':
-        max_value = np.max(normalised_array[normalisation_indexs[0]:normalisation_indexs[1],:])
+        max_value = np.max(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:])
         normalised_array = normalised_array / max_value
     elif method == 'interp_area':
-        max_value = np.max(normalised_array[normalisation_indexs[0]:normalisation_indexs[1],:])
+        max_value = np.max(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:])
         normalised_array = normalised_array / max_value
     else:
         pass
