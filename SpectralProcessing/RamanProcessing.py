@@ -15,29 +15,69 @@ import matplotlib.gridspec as gridspec
 import seaborn as sns
 import pandas as pd
 import pprint as pp
+
 from scipy.ndimage.interpolation import shift
 from scipy.signal import savgol_filter
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 import scipy.stats as stats
+from scipy import interpolate
+
+### Scikit-Learn
+
+### Classification modles
+
+### Discriminant analysis
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+### Ensemble
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.datasets import make_classification
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import BaggingClassifier
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+#from sklearn.ensemble import HistGradientBoostingClassifier
+### Gaussian process
+from sklearn.gaussian_process import GaussianProcessClassifier
+### Neural network
 from sklearn.neural_network import MLPClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.neural_network import BernoulliRBM
-from sklearn.decomposition import PCA
-from sklearn import svm
+### SVM
 from sklearn.svm import LinearSVC
+from sklearn.svm import NuSVC
+### Linear model
 from sklearn.linear_model import SGDClassifier
-from sklearn import neighbors
 from sklearn.linear_model import LogisticRegression
-from scipy import interpolate
-from sklearn.model_selection import cross_val_score
-from scipy import interpolate
-from BaselineRemoval import BaselineRemoval
+from sklearn.linear_model import RidgeClassifierCV
+from sklearn.linear_model import Perceptron
+from sklearn.linear_model import PassiveAggressiveClassifier
+### Neighbors
+from sklearn import neighbors
+### Tree
+#from sklearn.tree import DecisionTreeClassifier
+#from sklearn.tree import ExtraTreeClassifier
 
+# Utilities
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+from sklearn.datasets import make_classification
+
+# Decomposition
+from sklearn.decomposition import PCA
+from sklearn.decomposition import DictionaryLearning
+from sklearn.decomposition import FactorAnalysis
+from sklearn.decomposition import FastICA
+from sklearn.decomposition import IncrementalPCA
+from sklearn.decomposition import KernelPCA
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.decomposition import NMF
+from sklearn.decomposition import SparsePCA
+from sklearn.decomposition import TruncatedSVD
+
+#from sklearn import svm
+
+from BaselineRemoval import BaselineRemoval
+warnings.filterwarnings("ignore")
 # Define all function used in the program
 
 # Processing
@@ -130,9 +170,11 @@ def smooth(array, method = 'Savitzky–Golay', window = 3, polynomial = 0, axis 
             rft[fourior_values:] = 0
             smoothed_array[:,spectra] = np.fft.irfft(rft)[100:-100]
         return smoothed_array
-
-def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs = [890,910], wavenumbers=False):
+    
+def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs = [890,910], wavenumbers=False, zero_min=False, custom_values = False):
     array = np.transpose(np.stack(array))
+    if zero_min == True:
+        array = array + abs(np.min(array))
     normalised_array = np.zeros(np.shape(array))
     normalisation_indexs_2 = normalisation_indexs
     if type(wavenumbers) == np.ndarray:
@@ -158,15 +200,38 @@ def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs
             normalised_array[:,spectra] = array[:,spectra] / sum(f(np.arange(0,
                                                                 (normalisation_indexs_2[1]-normalisation_indexs_2[0])-1,
                                                                  0.1)))
+        elif method == 'custom_values':
+            normalised_array[:,spectra] = array[:,spectra] / custom_values[spectra]
+        
     if method == 'area':
         max_value = np.max(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:])
         normalised_array = normalised_array / max_value
     elif method == 'interp_area':
         max_value = np.max(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:])
         normalised_array = normalised_array / max_value
+    elif method == 'custom_values':
+        max_value = np.max(normalised_array)
+        normalised_array = normalised_array / max_value
     else:
         pass
     return normalised_array
+
+def subtractBackground(array, background, axis = 1):
+    array = np.transpose(np.stack(array))
+    corrected_array = np.zeros(np.shape(array))
+    index = 0
+    subtraction_factor = 0.01
+    done = False
+    while done == False:
+        if np.shape(array)[1] <= index:
+            done = True
+        elif np.min(array[:,index]-(background*subtraction_factor)) <= 0:
+            corrected_array[:,index] = array[:,index]-(background*subtraction_factor)
+            index += 1
+            subtraction_factor = 0.01
+        else:
+            subtraction_factor += 0.01
+    return corrected_array
 
 def removeCosmicRaySpikes(array, threshold=5):
     array = np.transpose(np.stack(array))
@@ -236,7 +301,7 @@ def addColumnToDataFrame(dataframe, column, column_name, axis = 1):
             index += 1
         return dataframe
 
-def baselineCorrection(array, method = 'ALS', lam=10**7, p=0.01, niter=10, fourior_values = 3, polynomial = 3):
+def baselineCorrection(array, method = 'ALS', lam=10**7, p=0.01, niter=10, fourior_values = 3, polynomial = 3, return_baseline = False):
     array = np.stack(array)
     baselined_array = np.zeros(np.shape(array))
     if method == 'ALS':
@@ -269,14 +334,25 @@ def baselineCorrection(array, method = 'ALS', lam=10**7, p=0.01, niter=10, fouri
             baseObj=BaselineRemoval(spectra)
             baselined_array[index,:] = baseObj.ZhangFit(polynomial)
             index += 1
-    return np.transpose(baselined_array)
+    if return_baseline == True:
+        return np.transpose(baselined_array), np.transpose(array-baselined_array)
+    else:
+        return np.transpose(baselined_array)
 
-def xAling(array, alingnemt_indexes = (895,901)):
+def xAling(array, alingnemt_indexes = [895,901], wavenumbers=False):
     array = np.transpose(np.stack(array))
     alinged_array = np.zeros(np.shape(array))
     aline_list = []
-    alingnemt_indexe_1 = alingnemt_indexes[0] * 10
-    alingnemt_indexe_2 = alingnemt_indexes[1] * 10
+    alingnemt_indexes_2 = alingnemt_indexes
+    if type(wavenumbers) == np.ndarray:
+        alingnemt_indexes_2[0] = np.absolute(wavenumbers - alingnemt_indexes[0]).argmin()
+        alingnemt_indexes_2[1] = np.absolute(wavenumbers - alingnemt_indexes[1]).argmin()
+        alingnemt_indexes_2 = sorted(alingnemt_indexes_2)
+        alingnemt_indexe_1 = alingnemt_indexes_2[0] * 10
+        alingnemt_indexe_2 = alingnemt_indexes_2[1] * 10
+    else:
+        alingnemt_indexe_1 = alingnemt_indexes[0] * 10
+        alingnemt_indexe_2 = alingnemt_indexes[1] * 10
     index = 0
     f = interpolate.interp1d(range(len(array[:,0])), array[:,0], kind='quadratic')
     interp1 = f(np.arange(0, len(array[:,0])-1, 0.1))
@@ -333,56 +409,184 @@ def find_best_principal_components(pca_1,pca_2,axis=0):
     d = np.argsort(abs(np.mean(pca_1,axis=axis) - np.mean(pca_2,axis=axis))/(np.std(pca_1,axis=axis)+np.std(pca_2,axis=axis)))
     return [d[-1],d[-2],d[-3]]
 
-def applyMachineLearingPredictors(array,classifier_lables,principal_components=False,CV=10,test_size=0.2):
+def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,number_of_components=10,plot_varian_ratio=False,CV=10,test_size=0.2,randomstate=0):
     correct_test = {'lgr'  :  [],
+                    'rcc'  :  [],
+                    'per'  :  [],
+                    'pac'  :  [],
                     'ann'  :  [],
+                    #'brbm' :  [],
                     'lda'  :  [],
                     'qda'  :  [],
+                    'bc'   :  [],
                     'rfs'  :  [],
+                    'abc'  :  [],
+                    'etc'  :  [],
+                    'gbc'  :  [],
+                    #'hgbc' :  [],
+                    'gpc'  :  [],
                     'sgd'  :  [],
                     'lsvm' :  [],
+                    'nsvm' :  [],
                     'knnu' :  [],
                     'knnd' :  []}
     
     correct_train = {'lgr'  :  [],
+                     'rcc'  :  [],
+                     'per'  :  [],
+                     'pac'  :  [],
                      'ann'  :  [],
+                     #'brbm' :  [],
                      'lda'  :  [],
                      'qda'  :  [],
+                     'bc'   :  [],
                      'rfs'  :  [],
+                     'abc'  :  [],
+                     'etc'  :  [],
+                     'gbc'  :  [],
+                     #'hgbc' :  [],
+                     'gpc'  :  [],
                      'sgd'  :  [],
                      'lsvm' :  [],
+                     'nsvm' :  [],
                      'knnu' :  [],
                      'knnd' :  []}
     
     array = np.stack(array)
     
-    if PCA == False:
+    if decomposition == False:
         X = array
         y = classifier_lables
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         X_train_2 = X_train
         X_test_2 = X_test
-    else:
+    elif decomposition == 'PCA':
         X = array
         y = classifier_lables
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
-        pca = PCA(n_components=principal_components)
+        pca = PCA(n_components=number_of_components)
         pca.fit(X_train)
         X_train_2 = pca.transform(X_train)
         X_test_2 = pca.transform(X_test)
-
+        list_RC = []
+        if plot_varian_ratio == True:
+            for inter in range(1,len(pca.explained_variance_ratio_)+1):
+                list_RC.append(sum(pca.explained_variance_ratio_[0:inter])*100)
+            plt.plot(range(1,len(list_RC)+1),list_RC);
+            plt.title('Roman Cheplyaka Plot for PCA')
+            plt.xlabel('Principal Componants')
+            plt.ylabel('Explained Variance')
+            plt.autoscale(enable=True, axis='x', tight=True)
+            plt.xticks(np.arange(1,len(list_RC)+1))
+            plt.grid()
+            plt.show()
+    elif decomposition == 'ICA':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        ica = FastICA(n_components=number_of_components,random_state=randomstate)
+        ica.fit(X_train)
+        X_train_2 = ica.transform(X_train)
+        X_test_2 = ica.transform(X_test)
+    elif decomposition == 'NMF':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        nmf = NMF(n_components=number_of_components)
+        nmf.fit(X_train)
+        X_train_2 = nmf.transform(X_train)
+        X_test_2 = nmf.transform(X_test)
+    elif decomposition == 'FA':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        fa = FactorAnalysis(n_components=number_of_components)
+        fa.fit(X_train)
+        X_train_2 = fa.transform(X_train)
+        X_test_2 = fa.transform(X_test)
+    elif decomposition == 'IPCA':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        ipca = IncrementalPCA(n_components=number_of_components)
+        ipca.fit(X_train)
+        X_train_2 = ipca.transform(X_train)
+        X_test_2 = ipca.transform(X_test)
+    elif decomposition == 'KPCA':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        kpca = KernelPCA(n_components=number_of_components)
+        kpca.fit(X_train)
+        X_train_2 = kpca.transform(X_train)
+        X_test_2 = kpca.transform(X_test)
+    elif decomposition == 'LDAL':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        ldal = LatentDirichletAllocation(n_components=number_of_components)
+        ldal.fit(X_train)
+        X_train_2 = ldal.transform(X_train)
+        X_test_2 = ldal.transform(X_test)
+    elif decomposition == 'SPCA':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        spca = SparsePCA(n_components=number_of_components)
+        spca.fit(X_train)
+        X_train_2 = spca.transform(X_train)
+        X_test_2 = spca.transform(X_test)
+    elif decomposition == 'TSVD':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        tsvd = TruncatedSVD(n_components=number_of_components)
+        tsvd.fit(X_train)
+        X_train_2 = tsvd.transform(X_train)
+        X_test_2 = tsvd.transform(X_test)
+    elif decomposition == 'DL':
+        X = array
+        y = classifier_lables
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        dl = DictionaryLearning(n_components=number_of_components)
+        dl.fit(X_train)
+        X_train_2 = dl.transform(X_train)
+        X_test_2 = dl.transform(X_test)
+    
     lgr = LogisticRegression()
     lgr.fit(X_train_2, y_train)
+    rcc = RidgeClassifierCV()
+    rcc.fit(X_train_2, y_train)
+    per = Perceptron()
+    per.fit(X_train_2, y_train)
+    pac = PassiveAggressiveClassifier()
+    pac.fit(X_train_2, y_train)
     lsvm = LinearSVC(random_state=0, tol=1e-5)
     lsvm.fit(X_train_2, y_train)
-    ann = MLPClassifier(hidden_layer_sizes=(50,50))
+    nsvm = NuSVC()
+    nsvm.fit(X_train_2, y_train)
+    ann = MLPClassifier(hidden_layer_sizes=(50,50),activation='relu',learning_rate='adaptive',max_iter=10000)
     ann.fit(X_train_2, y_train)
+    #brbm = BernoulliRBM()
+    #brbm.fit(X_train_2, y_train)
     lda = LinearDiscriminantAnalysis()
     lda.fit(X_train_2, y_train)
     qda = QuadraticDiscriminantAnalysis()
     qda.fit(X_train_2, y_train)
     rfs = RandomForestClassifier(n_estimators=200,max_depth=10,random_state=0)
     rfs.fit(X_train_2, y_train)
+    abc = AdaBoostClassifier()
+    abc.fit(X_train_2, y_train)
+    bc = BaggingClassifier()
+    bc.fit(X_train_2, y_train)
+    etc = ExtraTreesClassifier()
+    etc.fit(X_train_2, y_train)
+    gbc = GradientBoostingClassifier()
+    gbc.fit(X_train_2, y_train)
+    #hgbc = HistGradientBoostingClassifier()
+    #hgbc.fit(X_train_2, y_train)
+    gpc = GaussianProcessClassifier()
+    gpc.fit(X_train_2, y_train)
     sgd = SGDClassifier(loss="hinge", penalty="l2", max_iter=5)
     sgd.fit(X_train_2, y_train)
     knnu =  neighbors.KNeighborsClassifier(30, weights='uniform')
@@ -431,14 +635,15 @@ def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,p
     if print_plot == True:
         plt.show()
     
-def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,print_plot=True):
+def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,
+                          print_plot=True, offset=0, colour=['k']):
     spectra_ids = [i for i in spectra_ids]
     plt.plot(x_axis,
-             np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[0])][str(column)]),axis=0))-np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[1])][str(column)]),axis=0)),
-             c='k')
+             (np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[0])][str(column)]),axis=0))-np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[1])][str(column)]),axis=0)))+offset,
+             c=colour[0])
     plt.plot(x_axis,
-             np.zeros(np.shape(np.stack(data_frame[str(column)]))[1]),
-             '--k')
+             np.zeros(np.shape(np.stack(data_frame[str(column)]))[1])+offset,
+             ('--' + colour[-1]))
     plt.title('Difference Spectra')
     plt.xlabel('Wavenumbers (CM$^{-1}$)')
     plt.ylabel('Intencity (AU)')
@@ -446,7 +651,7 @@ def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulm
     if print_plot == True:
         plt.show()
 
-def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,PCs_plot=(0,1),print_plot=True):
+def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,PCs_plot=(0,1),print_plot=True,return_eigenvalues=False):
     colours = ['k','r','b','g','m']
     index = 0
     pca = PCA(n_components=principal_components)
@@ -462,6 +667,8 @@ def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_co
     plt.legend(spectra_ids)
     if print_plot == True:
         plt.show()
+    if return_eigenvalues == True:
+        return pca
     
 #def analyisePipeline(data_frame,classifier_lables,PCA=False,principal_components=10):
 #    for column in data_frame:
