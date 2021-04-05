@@ -457,17 +457,13 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
     if decomposition == False:
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
-        X_train_2 = X_train
-        X_test_2 = X_test
+        X_train = X
     elif decomposition == 'PCA':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         pca = PCA(n_components=number_of_components)
         pca.fit(X_train)
-        X_train_2 = pca.transform(X_train)
-        X_test_2 = pca.transform(X_test)
+        X_train = pca.transform(X)
         list_RC = []
         if plot_varian_ratio == True:
             for inter in range(1,len(pca.explained_variance_ratio_)+1):
@@ -483,116 +479,98 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
     elif decomposition == 'ICA':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         ica = FastICA(n_components=number_of_components,random_state=randomstate)
-        ica.fit(X_train)
-        X_train_2 = ica.transform(X_train)
-        X_test_2 = ica.transform(X_test)
+        ica.fit(X)
+        X_train = ica.transform(X)
     elif decomposition == 'NMF':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         nmf = NMF(n_components=number_of_components)
-        nmf.fit(X_train)
-        X_train_2 = nmf.transform(X_train)
-        X_test_2 = nmf.transform(X_test)
+        nmf.fit(X)
+        X_train = nmf.transform(X)
     elif decomposition == 'FA':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         fa = FactorAnalysis(n_components=number_of_components)
-        fa.fit(X_train)
-        X_train_2 = fa.transform(X_train)
-        X_test_2 = fa.transform(X_test)
+        fa.fit(X)
+        X_train = fa.transform(X)
     elif decomposition == 'IPCA':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         ipca = IncrementalPCA(n_components=number_of_components)
-        ipca.fit(X_train)
-        X_train_2 = ipca.transform(X_train)
-        X_test_2 = ipca.transform(X_test)
+        ipca.fit(X)
+        X_train = ipca.transform(X)
     elif decomposition == 'KPCA':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         kpca = KernelPCA(n_components=number_of_components)
         kpca.fit(X_train)
-        X_train_2 = kpca.transform(X_train)
-        X_test_2 = kpca.transform(X_test)
+        X_train = kpca.transform(X)
     elif decomposition == 'LDAL':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         ldal = LatentDirichletAllocation(n_components=number_of_components)
-        ldal.fit(X_train)
-        X_train_2 = ldal.transform(X_train)
-        X_test_2 = ldal.transform(X_test)
+        ldal.fit(X)
+        X_train = ldal.transform(X)
     elif decomposition == 'SPCA':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         spca = SparsePCA(n_components=number_of_components)
-        spca.fit(X_train)
-        X_train_2 = spca.transform(X_train)
-        X_test_2 = spca.transform(X_test)
+        spca.fit(X)
+        X_train = spca.transform(X)
     elif decomposition == 'TSVD':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         tsvd = TruncatedSVD(n_components=number_of_components)
         tsvd.fit(X_train)
-        X_train_2 = tsvd.transform(X_train)
-        X_test_2 = tsvd.transform(X_test)
+        X_train = tsvd.transform(X)
     elif decomposition == 'DL':
         X = array
         y = classifier_lables
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         dl = DictionaryLearning(n_components=number_of_components)
-        dl.fit(X_train)
-        X_train_2 = dl.transform(X_train)
-        X_test_2 = dl.transform(X_test)
+        dl.fit(X)
+        X_train = dl.transform(X)
     
     lgr = LogisticRegression()
-    lgr.fit(X_train_2, y_train)
+    lgr.fit(X_train, y_train)
     rcc = RidgeClassifierCV()
-    rcc.fit(X_train_2, y_train)
+    rcc.fit(X_train, y_train)
     per = Perceptron()
-    per.fit(X_train_2, y_train)
+    per.fit(X_train, y_train)
     pac = PassiveAggressiveClassifier()
-    pac.fit(X_train_2, y_train)
+    pac.fit(X_train, y_train)
     lsvm = LinearSVC(random_state=0, tol=1e-5)
-    lsvm.fit(X_train_2, y_train)
+    lsvm.fit(X_train, y_train)
     nsvm = NuSVC()
-    nsvm.fit(X_train_2, y_train)
+    nsvm.fit(X_train, y_train)
     ann = MLPClassifier(hidden_layer_sizes=(50,50),activation='relu',learning_rate='adaptive',max_iter=10000)
-    ann.fit(X_train_2, y_train)
+    ann.fit(X_train, y_train)
     #brbm = BernoulliRBM()
     #brbm.fit(X_train_2, y_train)
     lda = LinearDiscriminantAnalysis()
-    lda.fit(X_train_2, y_train)
+    lda.fit(X_train, y_train)
     qda = QuadraticDiscriminantAnalysis()
-    qda.fit(X_train_2, y_train)
+    qda.fit(X_train, y_train)
     rfs = RandomForestClassifier(n_estimators=200,max_depth=10,random_state=0)
-    rfs.fit(X_train_2, y_train)
+    rfs.fit(X_train, y_train)
     abc = AdaBoostClassifier()
-    abc.fit(X_train_2, y_train)
+    abc.fit(X_train, y_train)
     bc = BaggingClassifier()
-    bc.fit(X_train_2, y_train)
+    bc.fit(X_train, y_train)
     etc = ExtraTreesClassifier()
-    etc.fit(X_train_2, y_train)
+    etc.fit(X_train, y_train)
     gbc = GradientBoostingClassifier()
-    gbc.fit(X_train_2, y_train)
+    gbc.fit(X_train, y_train)
     #hgbc = HistGradientBoostingClassifier()
     #hgbc.fit(X_train_2, y_train)
     gpc = GaussianProcessClassifier()
-    gpc.fit(X_train_2, y_train)
+    gpc.fit(X_train, y_train)
     sgd = SGDClassifier(loss="hinge", penalty="l2", max_iter=5)
-    sgd.fit(X_train_2, y_train)
+    sgd.fit(X_train, y_train)
     knnu =  neighbors.KNeighborsClassifier(30, weights='uniform')
-    knnu.fit(X_train_2, y_train)
+    knnu.fit(X_train, y_train)
     knnd =  neighbors.KNeighborsClassifier(30, weights='distance')
-    knnd.fit(X_train_2, y_train) 
+    knnd.fit(X_train, y_train) 
 
     for key in tqdm(correct_train.keys(), desc='Cross-Validating Models', leave=False):
         correct_train[key] = cross_val_score(eval(key), X_train_2, y_train, cv=CV)
@@ -616,7 +594,7 @@ def dispayCVResults(Result_dictionary):
     plt.show()
 
 def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,print_plot=True):
-    colours = ['k','r','b','g','m']
+    colours = ['k','r','b','g','m','y']
     index = 0
     for spectra_class in spectra_ids:
         plt.plot(x_axis,
@@ -652,7 +630,7 @@ def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulm
         plt.show()
 
 def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,PCs_plot=(0,1),print_plot=True,return_eigenvalues=False):
-    colours = ['k','r','b','g','m']
+    colours = ['k','r','b','g','m','y']
     index = 0
     pca = PCA(n_components=principal_components)
     X = np.stack(data_frame[str(column)])
