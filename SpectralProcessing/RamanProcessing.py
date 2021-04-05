@@ -583,28 +583,28 @@ def dispayCVResults(Result_dictionary):
     plt.title('Predictive Power of Different Modles for Seperating Raman Data')
     plt.show()
 
-def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,print_plot=True):
-    colours = ['k','r','b','g','m','y']
+def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,print_plot=True,offset=0,plot_lables=True,colours = ['k','r','b','g','m','y']):
     index = 0
     for spectra_class in spectra_ids:
         plt.plot(x_axis,
-                 np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0)),
+                 np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+offset,
                  c=colours[index])
         plt.fill_between(x_axis,
-                         np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))-np.transpose(np.std(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0)),
-                         np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+np.transpose(np.std(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0)),
+                         np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))-np.transpose(np.std(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+offset,
+                         np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+np.transpose(np.std(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+offset,
                          facecolor=colours[index],alpha=0.3)
         index += 1
-    plt.title('Spectra Seperated by Sample Class')
-    plt.xlabel('Wavenumbers (CM$^{-1}$)')
-    plt.ylabel('Intencity (AU)')
+    if plot_lables == True:
+        plt.title('Spectra Seperated by Sample Class')
+        plt.xlabel('Wavenumbers (CM$^{-1}$)')
+        plt.ylabel('Intencity (AU)')
+        plt.legend(spectra_ids)
     plt.autoscale(enable=True, axis='x', tight=True)
-    plt.legend(spectra_ids)
     if print_plot == True:
         plt.show()
     
 def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,
-                          print_plot=True, offset=0, colour=['k']):
+                          print_plot=True, offset=0, colour=['k'], plot_lables=True):
     spectra_ids = [i for i in spectra_ids]
     plt.plot(x_axis,
              (np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[0])][str(column)]),axis=0))-np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[1])][str(column)]),axis=0)))+offset,
@@ -612,15 +612,15 @@ def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulm
     plt.plot(x_axis,
              np.zeros(np.shape(np.stack(data_frame[str(column)]))[1])+offset,
              ('--' + colour[-1]))
-    plt.title('Difference Spectra')
-    plt.xlabel('Wavenumbers (CM$^{-1}$)')
-    plt.ylabel('Intencity (AU)')
+    if plot_lables == True:
+        plt.title('Difference Spectra')
+        plt.xlabel('Wavenumbers (CM$^{-1}$)')
+        plt.ylabel('Intencity (AU)')
     plt.autoscale(enable=True, axis='x', tight=True)
     if print_plot == True:
         plt.show()
 
-def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,PCs_plot=(0,1),print_plot=True,return_eigenvalues=False):
-    colours = ['k','r','b','g','m','y']
+def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,PCs_plot=(0,1),print_plot=True,return_eigenvalues=False,colours = ['k','r','b','g','m','y']):
     index = 0
     pca = PCA(n_components=principal_components)
     X = np.stack(data_frame[str(column)])
