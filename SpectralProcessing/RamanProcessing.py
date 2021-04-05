@@ -181,27 +181,31 @@ def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs
         normalisation_indexs_2[0] = np.absolute(wavenumbers - normalisation_indexs[0]).argmin()
         normalisation_indexs_2[1] = np.absolute(wavenumbers - normalisation_indexs[1]).argmin()
     normalisation_indexs_2 = sorted(normalisation_indexs_2)
-    for spectra in range(np.shape(array)[axis]):
-        if method == 'max_within_range':
-            max_value = max(array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra])
-            normalised_array[:,spectra] = array[:,spectra] / max_value
-        elif method == 'max_whole_array':
-            max_value = max(array[:,spectra])
-            normalised_array[:,spectra] = array[:,spectra] / max_value
-        elif method == 'singel_point':
-            normalised_array[:,spectra] = array[:,spectra] / array[normalisation_indexs_2[0],spectra]
-        elif method == 'area':
-            max_value = sum(array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra])
-            normalised_array[:,spectra] = array[:,spectra] / max_value
-        elif method == 'interp_area':
-            f = interpolate.interp1d(range((normalisation_indexs_2[1]-normalisation_indexs_2[0])),
-                                     array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra],
-                                     kind='quadratic')
-            normalised_array[:,spectra] = array[:,spectra] / sum(f(np.arange(0,
-                                                                (normalisation_indexs_2[1]-normalisation_indexs_2[0])-1,
-                                                                 0.1)))
-        elif method == 'custom_values':
-            normalised_array[:,spectra] = array[:,spectra] / custom_values[spectra]
+    if method == 'scale':
+        max_value = np.max(array)
+        normalised_array = array / max_value
+    else:
+        for spectra in range(np.shape(array)[axis]):
+            if method == 'max_within_range':
+                max_value = max(array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra])
+                normalised_array[:,spectra] = array[:,spectra] / max_value
+            elif method == 'max_whole_array':
+                max_value = max(array[:,spectra])
+                normalised_array[:,spectra] = array[:,spectra] / max_value
+            elif method == 'singel_point':
+                normalised_array[:,spectra] = array[:,spectra] / array[normalisation_indexs_2[0],spectra]
+            elif method == 'area':
+                max_value = sum(array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra])
+                normalised_array[:,spectra] = array[:,spectra] / max_value
+            elif method == 'interp_area':
+                f = interpolate.interp1d(range((normalisation_indexs_2[1]-normalisation_indexs_2[0])),
+                                         array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra],
+                                         kind='quadratic')
+                normalised_array[:,spectra] = array[:,spectra] / sum(f(np.arange(0,
+                                                                    (normalisation_indexs_2[1]-normalisation_indexs_2[0])-1,
+                                                                     0.1)))
+            elif method == 'custom_values':
+                normalised_array[:,spectra] = array[:,spectra] / custom_values[spectra]
         
     if method == 'area':
         max_value = np.max(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:])
@@ -385,14 +389,22 @@ def signalToNoise(matrix, axis=0):
     StN = np.sqrt(mean_val) / std_val
     return np.mean(StN)
 
-def signalToNoiseOfDataframe(dataframe, colums='All'):
+def signalToNoiseOfDataframe(dataframe, scale=True):
     SNR = {}
-    for (columnName, columnData) in dataframe.iteritems():
-        try:
-            Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values),axis=0)
-        except:
-            Sigan_to_noise_ratio = None
-        SNR[columnName] = Sigan_to_noise_ratio
+    if scale == True:
+        for (columnName, columnData) in dataframe.iteritems():
+            try:
+                Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values,method = 'scale'),axis=1)
+            except:
+                Sigan_to_noise_ratio = None
+            SNR[columnName] = Sigan_to_noise_ratio
+    else:
+        for (columnName, columnData) in dataframe.iteritems():
+            try:
+                Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values),axis=0)
+            except:
+                Sigan_to_noise_ratio = None
+            SNR[columnName] = Sigan_to_noise_ratio
     return SNR
     
     
