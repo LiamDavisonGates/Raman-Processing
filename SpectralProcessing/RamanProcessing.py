@@ -409,8 +409,8 @@ def find_best_principal_components(pca_1,pca_2,axis=0):
     d = np.argsort(abs(np.mean(pca_1,axis=axis) - np.mean(pca_2,axis=axis))/(np.std(pca_1,axis=axis)+np.std(pca_2,axis=axis)))
     return [d[-1],d[-2],d[-3]]
 
-def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,number_of_components=10,plot_varian_ratio=False,CV=10,test_size=0.2,randomstate=0):
-    correct_test = {'lgr'  :  [],
+def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,number_of_components=10,plot_varian_ratio=False,CV=10,randomstate=0):
+    correct      = {'lgr'  :  [],
                     'rcc'  :  [],
                     'per'  :  [],
                     'pac'  :  [],
@@ -431,27 +431,6 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
                     'knnu' :  [],
                     'knnd' :  []}
     
-    correct_train = {'lgr'  :  [],
-                     'rcc'  :  [],
-                     'per'  :  [],
-                     'pac'  :  [],
-                     'ann'  :  [],
-                     #'brbm' :  [],
-                     'lda'  :  [],
-                     'qda'  :  [],
-                     'bc'   :  [],
-                     'rfs'  :  [],
-                     'abc'  :  [],
-                     'etc'  :  [],
-                     'gbc'  :  [],
-                     #'hgbc' :  [],
-                     'gpc'  :  [],
-                     'sgd'  :  [],
-                     'lsvm' :  [],
-                     'nsvm' :  [],
-                     'knnu' :  [],
-                     'knnd' :  []}
-    
     array = np.stack(array)
     
     if decomposition == False:
@@ -462,7 +441,7 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
         X = array
         y = classifier_lables
         pca = PCA(n_components=number_of_components)
-        pca.fit(X_train)
+        pca.fit(X)
         X_train = pca.transform(X)
         list_RC = []
         if plot_varian_ratio == True:
@@ -532,50 +511,49 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
         X_train = dl.transform(X)
     
     lgr = LogisticRegression()
-    lgr.fit(X_train, y_train)
+    lgr.fit(X_train, y)
     rcc = RidgeClassifierCV()
-    rcc.fit(X_train, y_train)
+    rcc.fit(X_train, y)
     per = Perceptron()
-    per.fit(X_train, y_train)
+    per.fit(X_train, y)
     pac = PassiveAggressiveClassifier()
-    pac.fit(X_train, y_train)
+    pac.fit(X_train, y)
     lsvm = LinearSVC(random_state=0, tol=1e-5)
-    lsvm.fit(X_train, y_train)
+    lsvm.fit(X_train, y)
     nsvm = NuSVC()
-    nsvm.fit(X_train, y_train)
+    nsvm.fit(X_train, y)
     ann = MLPClassifier(hidden_layer_sizes=(50,50),activation='relu',learning_rate='adaptive',max_iter=10000)
-    ann.fit(X_train, y_train)
+    ann.fit(X_train, y)
     #brbm = BernoulliRBM()
-    #brbm.fit(X_train_2, y_train)
+    #brbm.fit(X_train, y)
     lda = LinearDiscriminantAnalysis()
-    lda.fit(X_train, y_train)
+    lda.fit(X_train, y)
     qda = QuadraticDiscriminantAnalysis()
-    qda.fit(X_train, y_train)
+    qda.fit(X_train, y)
     rfs = RandomForestClassifier(n_estimators=200,max_depth=10,random_state=0)
-    rfs.fit(X_train, y_train)
+    rfs.fit(X_train, y)
     abc = AdaBoostClassifier()
-    abc.fit(X_train, y_train)
+    abc.fit(X_train, y)
     bc = BaggingClassifier()
-    bc.fit(X_train, y_train)
+    bc.fit(X_train, y)
     etc = ExtraTreesClassifier()
-    etc.fit(X_train, y_train)
+    etc.fit(X_train, y)
     gbc = GradientBoostingClassifier()
-    gbc.fit(X_train, y_train)
+    gbc.fit(X_train, y)
     #hgbc = HistGradientBoostingClassifier()
-    #hgbc.fit(X_train_2, y_train)
+    #hgbc.fit(X_train, y)
     gpc = GaussianProcessClassifier()
-    gpc.fit(X_train, y_train)
+    gpc.fit(X_train, y)
     sgd = SGDClassifier(loss="hinge", penalty="l2", max_iter=5)
-    sgd.fit(X_train, y_train)
+    sgd.fit(X_train, y)
     knnu =  neighbors.KNeighborsClassifier(30, weights='uniform')
-    knnu.fit(X_train, y_train)
+    knnu.fit(X_train, y)
     knnd =  neighbors.KNeighborsClassifier(30, weights='distance')
-    knnd.fit(X_train, y_train) 
+    knnd.fit(X_train, y) 
 
-    for key in tqdm(correct_train.keys(), desc='Cross-Validating Models', leave=False):
-        correct_train[key] = cross_val_score(eval(key), X_train_2, y_train, cv=CV)
-        correct_test[key] = cross_val_score(eval(key), X_test_2, y_test, cv=CV)
-    return correct_train, correct_test
+    for key in tqdm(correct.keys(), desc='Cross-Validating Models', leave=False):
+        correct[key] = cross_val_score(eval(key), X_train, y, cv=CV)
+    return correct
 
 def dispayCVResults(Result_dictionary):
     plt.bar(range(len(Result_dictionary)),
