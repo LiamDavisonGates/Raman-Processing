@@ -10,6 +10,7 @@ import pip
 import warnings
 from tqdm.notebook import tqdm
 import numpy as np
+from numpy.random import default_rng
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
@@ -81,33 +82,135 @@ warnings.filterwarnings("ignore")
 # Define all function used in the program
 
 # Processing
-def quickProcess(file_paths, sample_type):
-    WN, array, sample_ID = readArrayFromFile(file_paths, sample_type)
-    df = readArrayToDataFrame(array, 'Raw_array')
-    df['Sample_type'] = sample_ID
-    df = addColumnToDataFrame(df,
-                              smooth(df['Raw_array'],
-                                     method = 'FFT',
-                                     fourior_values = 250),
-                              'Smoothed_array')
-    df = addColumnToDataFrame(df,
-                              normalise(df['Smoothed_array'],
-                                        method = 'interp_area',
-                                        normalisation_indexs = (895,901)),
-                              'Normalized_array')
-    df = addColumnToDataFrame(df,
-                              baselineCorrection(df['Normalized_array'],
-                                                 lam=10**5),
-                              'Baseline_corrected_array')
-    df = addColumnToDataFrame(df,
-                              removeCosmicRaySpikes(df['Baseline_corrected_array'],
-                                                    threshold = 5),
-                              'Despiked_array')
-    df = addColumnToDataFrame(df,
-                              normalise(df['Despiked_array'],
-                                        method = 'interp_area',
-                                        normalisation_indexs = (895,901)),
-                              'Baseline_corrected_normalized_array')
+def quickProcess(file_paths, sample_type, method='Basic'):
+    if method == 'Basic':
+        WN, array, sample_ID = readArrayFromFile(file_paths, sample_type)
+        df = readArrayToDataFrame(array, 'Raw_array')
+        df['Sample_type'] = sample_ID
+        df = addColumnToDataFrame(df,
+                                  smooth(df['Raw_array'],
+                                         method = 'FFT',
+                                         fourior_values = 300),
+                                  'Smoothed_array')
+        df = addColumnToDataFrame(df,
+                                  normalise(df['Smoothed_array'],
+                                            method = 'area',
+                                            normalisation_indexs = [1000,1005],
+                                            wavenumbers=WN),
+                                  'Normalized_array')
+        df = addColumnToDataFrame(df,
+                                  baselineCorrection(df['Normalized_array'],
+                                                     lam=10**4.5),
+                                  'Baseline_corrected_array')
+        df = addColumnToDataFrame(df,
+                                  removeCosmicRaySpikes(df['Baseline_corrected_array'],
+                                                        threshold = 5),
+                                  'Despiked_array')
+        df = addColumnToDataFrame(df,
+                                  xAling(df['Despiked_array'],
+                                  alingnemt_indexes = [1000,1005],
+                                  wavenumbers=WN),
+                                  'Baseline_corrected_alinged_array')
+        df = addColumnToDataFrame(df,
+                                  normalise(df['Baseline_corrected_alinged_array'],
+                                            method = 'area',
+                                            normalisation_indexs = [1000,1005],
+                                            wavenumbers=WN),
+                                  'Baseline_corrected_normalized_array')
+    elif method == 'DNA_normlaisation':
+        WN, array, sample_ID = readArrayFromFile(file_paths, sample_type)
+        df = readArrayToDataFrame(array, 'Raw_array')
+        df['Sample_type'] = sample_ID
+        df = addColumnToDataFrame(df,
+                                  smooth(df['Raw_array'],
+                                         method = 'FFT',
+                                         fourior_values = 300),
+                                  'Smoothed_array')
+        df = addColumnToDataFrame(df,
+                                  normalise(df['Smoothed_array'],
+                                            method = 'area',
+                                            normalisation_indexs = [770,790],
+                                            wavenumbers=WN),
+                                  'Normalized_array')
+        df = addColumnToDataFrame(df,
+                                  baselineCorrection(df['Normalized_array'],
+                                                     lam=10**4.5),
+                                  'Baseline_corrected_array')
+        df = addColumnToDataFrame(df,
+                                  removeCosmicRaySpikes(df['Baseline_corrected_array'],
+                                                        threshold = 5),
+                                  'Despiked_array')
+        df = addColumnToDataFrame(df,
+                                  xAling(df['Despiked_array'],
+                                  alingnemt_indexes = [775,785],
+                                  wavenumbers=WN),
+                                  'Baseline_corrected_alinged_array')
+        df = addColumnToDataFrame(df,
+                                  normalise(df['Baseline_corrected_alinged_array'],
+                                            method = 'area',
+                                            normalisation_indexs = [770,790],
+                                            wavenumbers=WN),
+                                  'Baseline_corrected_normalized_array')
+    elif method == 'Heavy_normlaisation':
+        WN, array, sample_ID = readArrayFromFile(file_paths, sample_type)
+        df = readArrayToDataFrame(array, 'Raw_array')
+        df['Sample_type'] = sample_ID
+        df = addColumnToDataFrame(df,
+                                  smooth(df['Raw_array'],
+                                         method = 'FFT',
+                                         fourior_values = 300),
+                                  'Smoothed_array')
+        df = addColumnToDataFrame(df,
+                                  normalise(df['Smoothed_array'],
+                                            method = 'area',
+                                            normalisation_indexs = [990,1015],
+                                            wavenumbers=WN),
+                                  'Normalized_array')
+        df = addColumnToDataFrame(df,
+                                  baselineCorrection(df['Normalized_array'],
+                                                     lam=10**4.5),
+                                  'Baseline_corrected_array')
+        df = addColumnToDataFrame(df,
+                                  removeCosmicRaySpikes(df['Baseline_corrected_array'],
+                                                        threshold = 5),
+                                  'Despiked_array')
+        df = addColumnToDataFrame(df,
+                                  xAling(df['Despiked_array'],
+                                  alingnemt_indexes = [1000,1005],
+                                  wavenumbers=WN),
+                                  'Baseline_corrected_alinged_array')
+        df = addColumnToDataFrame(df,
+                                  normalise(df['Baseline_corrected_alinged_array'],
+                                            method = 'area',
+                                            normalisation_indexs = [990,1015],
+                                            wavenumbers=WN),
+                                  'Baseline_corrected_normalized_array')
+    elif method == 'Baseline_normalisation':
+        WN, array, sample_ID = readArrayFromFile(file_paths, sample_type)
+        df = readArrayToDataFrame(array, 'Raw_array')
+        df['Sample_type'] = sample_ID
+        df = addColumnToDataFrame(df,
+                                  smooth(df['Raw_array'],
+                                         method = 'FFT',
+                                         fourior_values = 300),
+                                  'Smoothed_array')
+        array, baseline = baselineCorrection(df['Smoothed_array'], method = 'ALS', lam=10**4.5, return_baseline = True)
+        df = addColumnToDataFrame(df, array, 'Baseline_corrected_array')
+        baseline_norm_values = np.sum(baseline,axis=0)
+        df = addColumnToDataFrame(df,
+                                  normalise(df['Baseline_corrected_array'],
+                                            method = 'custom_values',
+                                            custom_values=baseline_norm_values),
+                                  'Baseline_corrected_normalized_array')
+        df = addColumnToDataFrame(df,
+                                  removeCosmicRaySpikes(df['Baseline_corrected_normalized_array'],
+                                                        threshold = 5),
+                                  'Despiked_array')
+        df = addColumnToDataFrame(df,
+                                  xAling(df['Despiked_array'],
+                                         alingnemt_indexes = [1000,1005],
+                                         wavenumbers=WN),
+                                  'Baseline_corrected_alinged_array')
     return df
 
 def readArrayFromFile(file, sample_ID):
@@ -220,21 +323,25 @@ def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs
         pass
     return normalised_array
 
-def subtractBackground(array, background, axis = 1):
+def subtractBackground(array, background, axis = 1, method = 'Dynamic'):
     array = np.transpose(np.stack(array))
     corrected_array = np.zeros(np.shape(array))
     index = 0
-    subtraction_factor = 0.01
-    done = False
-    while done == False:
-        if np.shape(array)[1] <= index:
-            done = True
-        elif np.min(array[:,index]-(background*subtraction_factor)) <= 0:
-            corrected_array[:,index] = array[:,index]-(background*subtraction_factor)
-            index += 1
-            subtraction_factor = 0.01
-        else:
-            subtraction_factor += 0.01
+    if method == 'Dynamic':
+        subtraction_factor = 0.01
+        done = False
+        while done == False:
+            if np.shape(array)[1] <= index:
+                done = True
+            elif np.min(array[:,index]-(background*subtraction_factor)) <= 0:
+                corrected_array[:,index] = array[:,index]-(background*subtraction_factor)
+                index += 1
+                subtraction_factor = 0.01
+            else:
+                subtraction_factor += 0.01
+    elif method == 'Static':
+        for index in range(np.shape(array)[1]):
+            corrected_array[:,index] = array[:,index]-background
     return corrected_array
 
 def removeCosmicRaySpikes(array, threshold=5):
@@ -381,31 +488,110 @@ def vectorInterp(WN):
     return f(np.arange(0, len(WN)-1, 0.1))
 
 # Analysis
-def signalToNoise(matrix, axis=0):
+def signalToNoise(matrix, axis=0, sqrt_signal=True):
     mean_val = abs(np.mean(matrix,axis=axis))
     std_val = np.std(matrix,axis=axis)
-    zero_values = np.where(std_val==0)
+    zero_values = np.where(std_val<=0.00001)
     std_val[zero_values] = np.mean(std_val)
-    StN = np.sqrt(mean_val) / std_val
+    if sqrt_signal == True:
+        StN = np.sqrt(mean_val) / std_val
+    else:
+        StN = mean_val / std_val
     return np.mean(StN)
 
-def signalToNoiseOfDataframe(dataframe, scale=True):
+def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_size=30, subsample_repeats=20, display=True, plot_lables=True, print_plot=True):
     SNR = {}
-    if scale == True:
-        for (columnName, columnData) in dataframe.iteritems():
-            try:
-                Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values,method = 'scale'),axis=1)
-            except:
-                Sigan_to_noise_ratio = None
-            SNR[columnName] = Sigan_to_noise_ratio
+    if subsample == True:
+        if scale == True:
+            for (columnName, columnData) in dataframe.iteritems():
+                try:
+                    rng = default_rng()
+                    rand_ints = rng.choice(np.shape(columnData.values)[0], size=subsample_size, replace=False)
+                    Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values[rand_ints],method = 'scale'),axis=1)
+                    SNR[columnName] = [Sigan_to_noise_ratio]
+                except:
+                    Sigan_to_noise_ratio = None
+                    SNR[columnName] = Sigan_to_noise_ratio
+        else:
+            for (columnName, columnData) in dataframe.iteritems():
+                try:
+                    rng = default_rng()
+                    rand_ints = rng.choice(np.shape(columnData.values)[0], size=subsample_size, replace=False)
+                    Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values[rand_ints]),axis=0)
+                    SNR[columnName] = [Sigan_to_noise_ratio]
+                except:
+                    Sigan_to_noise_ratio = None
+                    SNR[columnName] = Sigan_to_noise_ratio
+        for x in range(subsample_repeats-1):
+            if scale == True:
+                for (columnName, columnData) in dataframe.iteritems():
+                    try:
+                        rng = default_rng()
+                        rand_ints = rng.choice(np.shape(columnData.values)[0], size=subsample_size, replace=False)
+                        Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values[rand_ints],method = 'scale'),axis=1)
+                        SNR[columnName].append(Sigan_to_noise_ratio)
+                    except:
+                        Sigan_to_noise_ratio = None
+            else:
+                for (columnName, columnData) in dataframe.iteritems():
+                    try:
+                        rng = default_rng()
+                        rand_ints = rng.choice(np.shape(columnData.values)[0], size=subsample_size, replace=False)
+                        Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values[rand_ints]),axis=0)
+                        SNR[columnName].append(Sigan_to_noise_ratio)
+                    except:
+                        Sigan_to_noise_ratio = None
     else:
-        for (columnName, columnData) in dataframe.iteritems():
-            try:
-                Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values),axis=0)
-            except:
-                Sigan_to_noise_ratio = None
-            SNR[columnName] = Sigan_to_noise_ratio
-    return SNR
+        if scale == True:
+            for (columnName, columnData) in dataframe.iteritems():
+                try:
+                    Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values,method = 'scale'),axis=1)
+                except:
+                    Sigan_to_noise_ratio = None
+                SNR[columnName] = Sigan_to_noise_ratio
+        else:
+            for (columnName, columnData) in dataframe.iteritems():
+                try:
+                    Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values),axis=0)
+                except:
+                    Sigan_to_noise_ratio = None
+                SNR[columnName] = Sigan_to_noise_ratio
+    
+    if display == True:
+        if subsample == True:
+            mean_dict = {}
+            std_dict = {}
+            for (columnName, columnData) in SNR.items():
+                if columnData != None:
+                    mean_dict[columnName] = np.mean(columnData)
+                    std_dict[columnName] = np.std(columnData)
+            plt.bar(range(len(mean_dict)),mean_dict.values(),yerr=std_dict.values());
+            if plot_lables == True:
+                plt.xticks(range(len(mean_dict)),[x for x in mean_dict.keys()],rotation = 90);
+                plt.title('SRN for Different Steps in the Raman Processing')
+                plt.xlabel('Processing Step')
+                plt.ylabel('Signal to Noise Ratio')
+            if print_plot == True:
+                plt.show()
+        else:
+            mean_dict = {}
+            for (columnName, columnData) in SNR.items():
+                if columnData != None:
+                    mean_dict[columnName] = columnData
+            plt.bar(range(len(mean_dict)),mean_dict.values());
+            if plot_lables == True:
+                plt.xticks(range(len(mean_dict)),[x for x in mean_dict.keys()],rotation = 90);
+                plt.title('SRN for Different Steps in the Raman Processing')
+                plt.xlabel('Processing Step')
+                plt.ylabel('Signal to Noise Ratio')
+            if print_plot == True:
+                plt.show()
+    else:
+        SNR_dict = {}
+        for (columnName, columnData) in SNR.items():
+            if columnData != None:
+                SNR_dict[columnName] = columnData
+        return SNR_dict
     
     
 def prediction(classifier, X_test, y_test):
@@ -637,22 +823,3 @@ def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_co
         plt.show()
     if return_eigenvalues == True:
         return pca
-    
-#def analyisePipeline(data_frame,classifier_lables,PCA=False,principal_components=10):
-#    for column in data_frame:
-#        array = np.stack(data_frame[column])
-#    
-#        if PCA == False:
-#            X = array
-#            y = classifier_lables
-#            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
-#            X_train_2 = X_train
-#            X_test_2 = X_test
-#        else:
-#            X = array
-#            y = classifier_lables
-#            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
-#            pca = PCA(n_components=principal_components)
-#            pca.fit(X_train)
-#            X_train_2 = pca.transform(X_train)
-#            X_test_2 = pca.transform(X_test)
