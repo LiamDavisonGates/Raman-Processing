@@ -23,6 +23,7 @@ from scipy import sparse
 from scipy.sparse.linalg import spsolve
 import scipy.stats as stats
 from scipy import interpolate
+from scipy.sparse import csc_matrix, eye, diags
 
 ### Scikit-Learn
 
@@ -295,6 +296,9 @@ def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs
             elif method == 'max_whole_array':
                 max_value = max(array[:,spectra])
                 normalised_array[:,spectra] = array[:,spectra] / max_value
+            elif method == 'whole_array':
+                max_value = sum(array[:,spectra])
+                normalised_array[:,spectra] = array[:,spectra] / max_value
             elif method == 'singel_point':
                 normalised_array[:,spectra] = array[:,spectra] / array[normalisation_indexs_2[0],spectra]
             elif method == 'area':
@@ -307,17 +311,27 @@ def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs
                 normalised_array[:,spectra] = array[:,spectra] / sum(f(np.arange(0,
                                                                     (normalisation_indexs_2[1]-normalisation_indexs_2[0])-1,
                                                                      0.1)))
+            elif method == 'max_within_interp_range':
+                f = interpolate.interp1d(range((normalisation_indexs_2[1]-normalisation_indexs_2[0])),
+                                         array[normalisation_indexs_2[0]:normalisation_indexs_2[1],spectra],
+                                         kind='quadratic')
+                normalised_array[:,spectra] = array[:,spectra] / np.max(f(np.arange(0,
+                                                                    (normalisation_indexs_2[1]-normalisation_indexs_2[0])-1,
+                                                                     0.1)))
             elif method == 'custom_values':
                 normalised_array[:,spectra] = array[:,spectra] / custom_values[spectra]
         
     if method == 'area':
-        max_value = np.max(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:])
+        max_value = np.max(np.mean(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:],axis=1))
         normalised_array = normalised_array / max_value
     elif method == 'interp_area':
-        max_value = np.max(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:])
+        max_value = np.max(np.mean(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:],axis=1))
         normalised_array = normalised_array / max_value
     elif method == 'custom_values':
-        max_value = np.max(normalised_array)
+        max_value = np.max(np.mean(normalised_array,axis=1))
+        normalised_array = normalised_array / max_value
+    elif method == 'whole_array':
+        max_value = np.max(np.mean(normalised_array,axis=1))
         normalised_array = normalised_array / max_value
     else:
         pass
@@ -344,22 +358,84 @@ def subtractBackground(array, background, axis = 1, method = 'Dynamic'):
             corrected_array[:,index] = array[:,index]-background
     return corrected_array
 
-def removeCosmicRaySpikes(array, threshold=5):
+def removeCosmicRaySpikes(array, method = 'wavenumber', threshold_diff=5, threshold_wn=5, return_CRS_positions=False):
     array = np.transpose(np.stack(array))
     removed_spikes = []
     despiked_raman_array = copy.deepcopy(array)
-    row = 0
-    for x in tqdm(array, desc='Despike', leave=False):
+    if method == 'wavenumber':
+        row = 0
+        for x in tqdm(array, desc='Despike', leave=False):
+            index = 0
+            for y in x:
+                if y > np.mean(x) + np.std(x):
+                    new_array = np.delete(x, index)
+                    if  y > np.mean(new_array) + threshold_wn * np.std(new_array):
+                        despiked_raman_array[row,index] = np.mean(new_array)
+                        removed_spikes.append([index,row,y])
+                index += 1
+            row += 1
+        if return_CRS_positions == True:
+            return despiked_raman_array, removed_spikes
+        else:
+            return despiked_raman_array
+    elif method == 'diff':
+        matrix = array
+        spikes = 1
+        while spikes != 0:
+            spikes_desc = spikes
+            spikes = 0
+            min_threshold = 0 - np.mean(np.std(np.diff(matrix,2),axis=1))*threshold_diff
+            for spectrum in tqdm(range(np.shape(matrix)[0]),desc='Despike (' + str(spikes_desc) + ' Spikes Remaing)' , leave=False):
+                second_diff_spectrum = np.diff(matrix[spectrum,:],2)
+                for wavenumber in range(np.shape(matrix)[1]-2):
+                    if min_threshold > second_diff_spectrum[wavenumber] or abs(min_threshold) < second_diff_spectrum[wavenumber]:
+                        removed_spikes.append([wavenumber+1,spectrum,matrix[spectrum,wavenumber+1]])
+                        matrix[spectrum,wavenumber+1] = matrix[spectrum,wavenumber+1]*0.95
+                        #spikes += 1
+        if return_CRS_positions == True:
+            return matrix, removed_spikes
+        else:
+            return matrix
+    elif method == 'consensus':
+        removed_spikes_wn = []
+        removed_spikes_diff = []
+        despiked_raman_array = copy.deepcopy(array)
+        row = 0
+        for x in tqdm(array, desc='Despike', leave=False):
+            index = 0
+            for y in x:
+                if y > np.mean(x) + np.std(x):
+                    new_array = np.delete(x, index)
+                    if  y > np.mean(new_array) + threshold_wn * np.std(new_array):
+                        removed_spikes_wn.append([index,row,y,np.mean(new_array)])
+                        #print('spike')
+                index += 1
+            row += 1
+
+        matrix = array
+        spikes = 1
+        while spikes != 0:
+            spikes_desc = spikes
+            spikes = 0
+            min_threshold = 0 - np.mean(np.std(np.diff(matrix,2),axis=1))*threshold_diff
+            for spectrum in tqdm(range(np.shape(matrix)[0]),desc='Despike (' + str(spikes_desc) + ' Spikes Remaing)' , leave=False):
+                second_diff_spectrum = np.diff(matrix[spectrum,:],2)
+                for wavenumber in range(np.shape(matrix)[1]-2):
+                    if min_threshold > second_diff_spectrum[wavenumber] or abs(min_threshold) < second_diff_spectrum[wavenumber]:
+                        removed_spikes_diff.append([wavenumber+1,spectrum,matrix[spectrum,wavenumber+1]])
+        
+        #print(np.shape(np.array(removed_spikes_wn)))
+        #print(np.shape(np.array(removed_spikes_diff)))
+        mask = np.isin(np.array(removed_spikes_wn)[:,1:3],np.array(removed_spikes_diff)[:,1:3])
+        detected_spikes = np.array(removed_spikes_wn)[mask[:,0],0:2].astype(int)
+        new_values = np.array(removed_spikes_wn)[mask[:,0],3]
         index = 0
-        for y in x:
-            if y > np.mean(x) + np.std(x):
-                new_array = np.delete(x, index)
-                if  y > np.mean(new_array) + threshold * np.std(new_array):
-                    despiked_raman_array[row,index] = np.mean(new_array)
-                    removed_spikes.append([row, y])
+        for x in detected_spikes[:,0]:
+            despiked_raman_array[detected_spikes[index,1],x] = new_values[index]
             index += 1
-        row += 1
-    return despiked_raman_array
+        return despiked_raman_array
+    else:
+        print('Error: Method not found = ' + str(method))
 
 def baselineALS(y, lam, p, niter=10):
     L = len(y)
@@ -412,45 +488,166 @@ def addColumnToDataFrame(dataframe, column, column_name, axis = 1):
             index += 1
         return dataframe
 
-def baselineCorrection(array, method = 'ALS', lam=10**7, p=0.01, niter=10, fourior_values = 3, polynomial = 3, return_baseline = False):
+def oval(h,w,y):
+    return np.sqrt(((1-((y**2)/(h**2)))*(w**2)))
+
+def rollingBall(spectrum,ball_H,ball_W):
+    baseline = []
+    oval_shape = []
+    index = -ball_W
+    for o in range(ball_W*2):
+        oval_shape.append(oval(ball_W,ball_H,abs(index)))
+        index += 1
+    for x in range(len(spectrum)):
+        ball = spectrum[x]-ball_H
+        for y in range(ball_W*2):
+            if (x-ball_W+y > 0) & (x-ball_W+y < len(spectrum)) & (index != 0):
+                if spectrum[x-ball_W+y] < ball + oval_shape[y]:
+                    ball = spectrum[x-ball_W+y] - oval_shape[y]
+        baseline.append(ball)
+    return np.array(baseline) + ball_H
+
+def moving_average(x, w):
+    return np.convolve(x, np.ones(w), 'valid') / w
+
+def WhittakerSmooth(x,w,lambda_,differences=1):
+    '''
+    Penalized least squares algorithm for background fitting
+    
+    input
+        x: input data (i.e. chromatogram of spectrum)
+        w: binary masks (value of the mask is zero if a point belongs to peaks and one otherwise)
+        lambda_: parameter that can be adjusted by user. The larger lambda is,  the smoother the resulting background
+        differences: integer indicating the order of the difference of penalties
+    
+    output
+        the fitted background vector
+    
+    https://github.com/zmzhang/airPLS/blob/master/airPLS.py
+    '''
+    X=np.matrix(x)
+    m=X.size
+    i=np.arange(0,m)
+    E=eye(m,format='csc')
+    D=E[1:]-E[:-1] # numpy.diff() does not work with sparse matrix. This is a workaround.
+    W=diags(w,0,shape=(m,m))
+    A=csc_matrix(W+(lambda_*D.T*D))
+    B=csc_matrix(W*X.T)
+    background=spsolve(A,B)
+    return np.array(background)
+
+def airPLS(x, lambda_=100, porder=1, itermax=15):
+    '''
+    Adaptive iteratively reweighted penalized least squares for baseline fitting
+    
+    input
+        x: input data (i.e. chromatogram of spectrum)
+        lambda_: parameter that can be adjusted by user. The larger lambda is,  the smoother the resulting background, z
+        porder: adaptive iteratively reweighted penalized least squares for baseline fitting
+    
+    output
+        the fitted background vector
+    
+    https://github.com/zmzhang/airPLS/blob/master/airPLS.py
+    '''
+    m=x.shape[0]
+    w=np.ones(m)
+    for i in range(1,itermax+1):
+        z=WhittakerSmooth(x,w,lambda_, porder)
+        d=x-z
+        dssn=np.abs(d[d<0].sum())
+        if(dssn<0.001*(abs(x)).sum() or i==itermax):
+            if(i==itermax):
+                print('WARING max iteration reached!')
+            break
+        w[d>=0]=0 # d>0 means that this point is part of a peak, so its weight is set to 0 in order to ignore it
+        w[d<0]=np.exp(i*np.abs(d[d<0])/dssn)
+        w[0]=np.exp(i*(d[d<0]).max()/dssn) 
+        w[-1]=w[0]
+    return z
+
+
+def baselineCorrection(array, method = 'ALS', lam=10**4, p=0.01, niter=10, fourier_values = 3,
+                       fourier_type = 'RDFT', polynomial = 3, itterations = 10, ball_H=0.1,
+                       ball_W=25, window_size = 100, lambda_airPLS = 100, porder=1, itermax=15,
+                       return_baseline = False):
     array = np.stack(array)
     baselined_array = np.zeros(np.shape(array))
     if method == 'ALS':
         index = 0
-        for spectra in tqdm(array,desc='Baseline',leave=False):
+        for spectra in tqdm(array,desc='Baseline (ALS)',leave=False):
             baselined_array[index,:] = spectra - baselineALS(spectra, lam=lam, p=p, niter=niter)
+            index += 1
+    elif method == 'airPLS':
+        index = 0
+        for spectra in tqdm(array,desc='Baseline (airPLS)',leave=False):
+            baselined_array[index,:] = spectra - airPLS(spectra, lambda_=lambda_airPLS, porder=porder, itermax=itermax)
             index += 1
     elif method == 'FFT':
         index = 0
-        for spectra in tqdm(array,desc='Baseline',leave=False):
-            rft = np.fft.rfft(spectra)
-            rft[:fourior_values] = 0
-            baselined_array[index,:] = np.fft.irfft(rft)
+        for spectra in tqdm(array,desc='Baseline (FFT / ' + str(fourier_type) + ')',leave=False):
+            if fourier_type == 'DFT': 
+                rft = np.fft.fft(spectra)
+                rft[:fourier_values] = 0
+                baselined_array[index,:] = np.fft.ifft(rft)
+            elif fourier_type == 'RDFT': 
+                rft = np.fft.rfft(spectra)
+                rft[:fourier_values] = 0
+                baselined_array[index,:] = np.fft.irfft(rft)
+            elif fourier_type == 'Hermitian': 
+                rft = np.fft.hfft(spectra)
+                rft[:fourier_values] = 0
+                baselined_array[index,:] = np.fft.ihfft(rft)
             index += 1
     elif method == 'ModPoly':
         index = 0
-        for spectra in tqdm(array,desc='Baseline',leave=False):
+        for spectra in tqdm(array,desc='Baseline (ModPoly)',leave=False):
             baseObj=BaselineRemoval(spectra)
             baselined_array[index,:] = baseObj.ModPoly(polynomial)
             index += 1
     elif method == 'IModPoly':
         index = 0
-        for spectra in tqdm(array,desc='Baseline',leave=False):
+        for spectra in tqdm(array,desc='Baseline (IModPoly)',leave=False):
             baseObj=BaselineRemoval(spectra)
             baselined_array[index,:] = baseObj.IModPoly(polynomial)
             index += 1
     elif method == 'Zhang':
         index = 0
-        for spectra in tqdm(array,desc='Baseline',leave=False):
+        for spectra in tqdm(array,desc='Baseline (Zhang)',leave=False):
             baseObj=BaselineRemoval(spectra)
             baselined_array[index,:] = baseObj.ZhangFit(polynomial)
+            index += 1
+    elif method == 'SWiMA':
+        index = 0
+        for spectra in tqdm(array,desc='Baseline (SWiMA)',leave=False):
+            window = 3
+            working_spectra = spectra
+            for repeat in range(itterations):
+                working_spectra = np.pad(working_spectra, 2, mode='reflect')
+                smoothed_array = savgol_filter(working_spectra,window,0)
+                a = working_spectra-smoothed_array
+                a[a > 0] = 0
+                working_spectra = a + smoothed_array
+                window += 2
+            baselined_array[index,:] = spectra - working_spectra[(window-3):-(window-3)]
+            index += 1
+    elif method == 'RollingBall':
+        index = 0
+        for spectra in tqdm(array,desc='Baseline (Rolling Ball)',leave=False):
+            baselined_array[index,:] = spectra - rollingBall(spectra,ball_H,ball_W)
+            index += 1
+    elif method == 'Average':
+        index = 0
+        for spectra in tqdm(array,desc='Baseline (Moving Average)',leave=False):
+            f = np.pad(spectra, (int(window_size/2)), 'constant', constant_values=(spectra[0], spectra[-1]))
+            baselined_array[index,:] = spectra - moving_average(f, int(window_size))[0:len(spectra)]
             index += 1
     if return_baseline == True:
         return np.transpose(baselined_array), np.transpose(array-baselined_array)
     else:
         return np.transpose(baselined_array)
 
-def xAling(array, alingnemt_indexes = [895,901], wavenumbers=False):
+def xAling(array, alingnemt_indexes = [895,901], wavenumbers=False, pre_normalise=False, aling_to_max=True):
     array = np.transpose(np.stack(array))
     alinged_array = np.zeros(np.shape(array))
     aline_list = []
@@ -459,28 +656,62 @@ def xAling(array, alingnemt_indexes = [895,901], wavenumbers=False):
         alingnemt_indexes_2[0] = np.absolute(wavenumbers - alingnemt_indexes[0]).argmin()
         alingnemt_indexes_2[1] = np.absolute(wavenumbers - alingnemt_indexes[1]).argmin()
         alingnemt_indexes_2 = sorted(alingnemt_indexes_2)
-        alingnemt_indexe_1 = alingnemt_indexes_2[0] * 10
-        alingnemt_indexe_2 = alingnemt_indexes_2[1] * 10
+        alingnemt_indexe_1 = (alingnemt_indexes_2[0] * 10) + 30
+        alingnemt_indexe_2 = (alingnemt_indexes_2[1] * 10) + 30
     else:
         alingnemt_indexe_1 = alingnemt_indexes[0] * 10
         alingnemt_indexe_2 = alingnemt_indexes[1] * 10
     index = 0
+    copied_array = copy.deepcopy(array)
     f = interpolate.interp1d(range(len(array[:,0])), array[:,0], kind='quadratic')
     interp1 = f(np.arange(0, len(array[:,0])-1, 0.1))
     interp1 = np.pad(interp1, (30, 30), 'constant', constant_values=((array[:,0][0],array[:,0][-1])))
+    #print(len(interp1[alingnemt_indexe_1:alingnemt_indexe_2]))
     alinged_array = np.zeros((len(interp1[30:len(interp1)-30]),np.shape(array)[1]))
-    #alinged_array[:,index] = interp1[30:len(interp1)-30]
-    for spectra in tqdm(np.transpose(array),desc='X Aling',leave=False):
-        f = interpolate.interp1d(range(len(spectra)), spectra, kind='quadratic')
-        interp2 = f(np.arange(0, len(spectra)-1, 0.1))
-        interp2 = np.pad(interp2, (30, 30), 'constant', constant_values=((spectra[0],spectra[-1])))
-        role_list = []
-        for x in range(-30,30):   
-            role_list.append(sum(abs(interp1[alingnemt_indexe_1:alingnemt_indexe_2] - np.roll(interp2, x)[alingnemt_indexe_1:alingnemt_indexe_2])))
-        aling_index = np.argmin(role_list)-30   
-        aline_list.append(aling_index)
-        alinged_array[:,index] = np.roll(interp2,aling_index)[30:len(interp2)-30]
-        index += 1
+    if pre_normalise == True:
+        norm_array = normalise(copied_array, axis = 1, method = 'area', normalisation_indexs = [alingnemt_indexes_2[0],alingnemt_indexes_2[1]], wavenumbers=False)
+        norm_array = np.transpose(norm_array)
+        f = interpolate.interp1d(range(len(norm_array[:,0])), norm_array[:,0], kind='quadratic')
+        interp1N = f(np.arange(0, len(norm_array[:,0])-1, 0.1))
+        interp1N = np.pad(interp1N, (30, 30), 'constant', constant_values=((norm_array[:,0][0],norm_array[:,0][-1])))
+        alinged_array = np.zeros((len(interp1N[30:len(interp1N)-30]),np.shape(norm_array)[1]))
+        for spectra in tqdm(np.transpose(norm_array),desc='X Aling',leave=False):
+            #print(np.shape(spectra))
+            f = interpolate.interp1d(range(len(spectra)), spectra, kind='quadratic')
+            interp2N = f(np.arange(0, len(spectra)-1, 0.1))
+            interp2N = np.pad(interp2N, (30, 30), 'constant', constant_values=((spectra[0],spectra[-1])))
+            f2 = interpolate.interp1d(range(len(spectra)), array[:,index], kind='quadratic')
+            interp2 = f2(np.arange(0, len(spectra)-1, 0.1))
+            interp2 = np.pad(interp2, (30, 30), 'constant', constant_values=((array[0,index],array[-1,index])))
+            role_list = []
+            for x in range(-30,30):   
+                role_list.append(sum(abs(interp1N[alingnemt_indexe_1:alingnemt_indexe_2] - np.roll(interp2N, x)[alingnemt_indexe_1:alingnemt_indexe_2])))
+            aling_index = np.argmin(role_list)-30   
+            aline_list.append(aling_index)
+            #print(np.shape(alinged_array))
+            #print(np.shape(interp2))
+            alinged_array[:,index] = np.roll(interp2,aling_index)[30:len(interp2)-30]
+            index += 1
+    else:
+        for spectra in tqdm(np.transpose(array),desc='X Aling',leave=False):
+            f = interpolate.interp1d(range(len(spectra)), spectra, kind='quadratic')
+            interp2 = f(np.arange(0, len(spectra)-1, 0.1))
+            interp2 = np.pad(interp2, (30, 30), 'constant', constant_values=((spectra[0],spectra[-1])))
+            #print(str(np.argmax(interp1[alingnemt_indexe_1:alingnemt_indexe_2])) + ':' + str(np.argmax(interp2[alingnemt_indexe_1:alingnemt_indexe_2])))
+            if aling_to_max == True:
+                #plt.plot(interp2[alingnemt_indexe_1:alingnemt_indexe_2])
+                #plt.show()
+                max_index1 = np.argmax(interp1[alingnemt_indexe_1:alingnemt_indexe_2])
+                max_index2 = np.argmax(interp2[alingnemt_indexe_1:alingnemt_indexe_2])
+                alinged_array[:,index] = np.roll(interp2,(max_index1-max_index2))[30:len(interp2)-30]
+            else:
+                role_list = []
+                for x in range(-30,30):   
+                    role_list.append(sum(abs(interp1[alingnemt_indexe_1:alingnemt_indexe_2] - np.roll(interp2, x)[alingnemt_indexe_1:alingnemt_indexe_2])))
+                aling_index = np.argmin(role_list)-30   
+                aline_list.append(aling_index)
+                alinged_array[:,index] = np.roll(interp2,aling_index)[30:len(interp2)-30]
+            index += 1
     return alinged_array
 
 def vectorInterp(WN):
@@ -488,18 +719,80 @@ def vectorInterp(WN):
     return f(np.arange(0, len(WN)-1, 0.1))
 
 # Analysis
-def signalToNoise(matrix, axis=0, sqrt_signal=True):
-    mean_val = abs(np.mean(matrix,axis=axis))
-    std_val = np.std(matrix,axis=axis)
-    zero_values = np.where(std_val<=0.00001)
-    std_val[zero_values] = np.mean(std_val)
-    if sqrt_signal == True:
-        StN = np.sqrt(mean_val) / std_val
-    else:
-        StN = mean_val / std_val
-    return np.mean(StN)
+def applyRamanSignalMask(array,bool_arr):
+    baseline_arr = copy.deepcopy(array)
+    index = 0
+    start = False
+    end = False
+    start_index = 0
+    end_index = 0
+    for boolian in bool_arr:
+        if boolian != True:
+            if start == False:
+                pass
+            else:
+                end_value = array[index]
+                end = True
+                end_index = index
+        else:
+            if start != False:
+                pass
+            else:
+                start_value = array[index]
+                start = True
+                start_index = index
+        if start != False:
+            if end != False:
+                line = np.linspace(start_value, end_value, num=int(end_index-start_index))
+                baseline_arr[start_index:end_index] = line
+                start = False
+                end = False
+        index += 1
+    return baseline_arr
 
-def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_size=30, subsample_repeats=20, display=True, plot_lables=True, print_plot=True):
+def signalToNoise(matrix, axis=0, sqrt_signal=True, mask='none'):
+    if mask == 'none':
+        mean_val = abs(np.mean(matrix,axis=axis))
+        std_val = np.std(matrix,axis=axis)
+        zero_values = np.where(std_val<=0.00001)
+        std_val[zero_values] = np.mean(std_val)
+        #if sqrt_signal == True:
+        #    StN = np.sqrt(mean_val) / std_val
+        #else:
+        #    StN = mean_val / std_val
+        #return np.mean(StN)
+        if sqrt_signal == True:
+            StN = np.mean(np.sqrt(mean_val)) / np.mean(std_val)
+        else:
+            StN = np.mean(mean_val) / np.mean(std_val)
+        return StN
+    else:
+        new_array = np.zeros(np.shape(matrix))
+        index = 0
+        for x in matrix:
+            x2 = copy.deepcopy(x)
+            y = x2 - applyRamanSignalMask(x,mask)
+            y[y<0] = 0
+            new_array[index,:] = y
+            index += 1
+        mean_val = abs(np.mean(new_array,axis=axis))
+        std_val = np.std(new_array,axis=axis)
+        zero_values = np.where(std_val<=0.00001)
+        std_val[zero_values] = np.mean(std_val)
+        #if sqrt_signal == True:
+        #    StN = np.sqrt(mean_val) / std_val
+        #else:
+        #    StN = mean_val / std_val
+        #return np.mean(StN)
+        if sqrt_signal == True:
+            StN = np.mean(np.sqrt(mean_val)) / np.mean(std_val)
+        else:
+            StN = np.mean(mean_val) / np.mean(std_val)
+            #StN = (1000*np.mean(mean_val))/((1000*np.mean(std_val))**2)
+        return StN
+
+def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_size=30, subsample_repeats=20,
+                             display=True, plot_lables=True, print_plot=True, sqrt_signal=True, mask='none'):
     SNR = {}
     if subsample == True:
         if scale == True:
@@ -507,7 +800,7 @@ def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_s
                 try:
                     rng = default_rng()
                     rand_ints = rng.choice(np.shape(columnData.values)[0], size=subsample_size, replace=False)
-                    Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values[rand_ints],method = 'scale'),axis=1)
+                    Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values[rand_ints],method = 'scale'),axis=1,sqrt_signal=sqrt_signal,mask=mask)
                     SNR[columnName] = [Sigan_to_noise_ratio]
                 except:
                     Sigan_to_noise_ratio = None
@@ -517,7 +810,7 @@ def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_s
                 try:
                     rng = default_rng()
                     rand_ints = rng.choice(np.shape(columnData.values)[0], size=subsample_size, replace=False)
-                    Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values[rand_ints]),axis=0)
+                    Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values[rand_ints]),axis=0,sqrt_signal=sqrt_signal,mask=mask)
                     SNR[columnName] = [Sigan_to_noise_ratio]
                 except:
                     Sigan_to_noise_ratio = None
@@ -528,7 +821,7 @@ def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_s
                     try:
                         rng = default_rng()
                         rand_ints = rng.choice(np.shape(columnData.values)[0], size=subsample_size, replace=False)
-                        Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values[rand_ints],method = 'scale'),axis=1)
+                        Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values[rand_ints],method = 'scale'),axis=1,sqrt_signal=sqrt_signal,mask=mask)
                         SNR[columnName].append(Sigan_to_noise_ratio)
                     except:
                         Sigan_to_noise_ratio = None
@@ -537,7 +830,7 @@ def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_s
                     try:
                         rng = default_rng()
                         rand_ints = rng.choice(np.shape(columnData.values)[0], size=subsample_size, replace=False)
-                        Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values[rand_ints]),axis=0)
+                        Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values[rand_ints]),axis=0,sqrt_signal=sqrt_signal,mask=mask)
                         SNR[columnName].append(Sigan_to_noise_ratio)
                     except:
                         Sigan_to_noise_ratio = None
@@ -545,14 +838,14 @@ def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_s
         if scale == True:
             for (columnName, columnData) in dataframe.iteritems():
                 try:
-                    Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values,method = 'scale'),axis=1)
+                    Sigan_to_noise_ratio = signalToNoise(normalise(columnData.values,method = 'scale'),axis=1,sqrt_signal=sqrt_signal,mask=mask)
                 except:
                     Sigan_to_noise_ratio = None
                 SNR[columnName] = Sigan_to_noise_ratio
         else:
             for (columnName, columnData) in dataframe.iteritems():
                 try:
-                    Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values),axis=0)
+                    Sigan_to_noise_ratio = signalToNoise(np.stack(columnData.values),axis=0,sqrt_signal=sqrt_signal,mask=mask)
                 except:
                     Sigan_to_noise_ratio = None
                 SNR[columnName] = Sigan_to_noise_ratio
@@ -769,18 +1062,19 @@ def dispayCVResults(Result_dictionary):
     plt.title('Predictive Power of Different Modles for Seperating Raman Data')
     plt.show()
 
-def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,print_plot=True,offset=0,plot_lables=True,colours = ['k','r','b','g','m','y']):
+def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,print_plot=True,offset=0,
+                       plot_labels=True,colours = ['k','r','b','g','m','y'],linewidth=1):
     index = 0
     for spectra_class in spectra_ids:
         plt.plot(x_axis,
                  np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+offset,
-                 c=colours[index])
+                 c=colours[index],linewidth=linewidth)
         plt.fill_between(x_axis,
                          np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))-np.transpose(np.std(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+offset,
                          np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+np.transpose(np.std(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][str(column)]),axis=0))+offset,
                          facecolor=colours[index],alpha=0.3)
         index += 1
-    if plot_lables == True:
+    if plot_labels == True:
         plt.title('Spectra Seperated by Sample Class')
         plt.xlabel('Wavenumbers (CM$^{-1}$)')
         plt.ylabel('Intencity (AU)')
@@ -790,15 +1084,16 @@ def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,p
         plt.show()
     
 def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,
-                          print_plot=True, offset=0, colour=['k'], plot_lables=True):
+                          print_plot=True, offset=0, colour=['k'], plot_labels=True,
+                          linewidth=1):
     spectra_ids = [i for i in spectra_ids]
     plt.plot(x_axis,
              (np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[0])][str(column)]),axis=0))-np.transpose(np.mean(np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_ids[1])][str(column)]),axis=0)))+offset,
-             c=colour[0])
+             c=colour[0],linewidth=linewidth)
     plt.plot(x_axis,
              np.zeros(np.shape(np.stack(data_frame[str(column)]))[1])+offset,
-             ('--' + colour[-1]))
-    if plot_lables == True:
+             ('--' + colour[-1]),linewidth=linewidth)
+    if plot_labels == True:
         plt.title('Difference Spectra')
         plt.xlabel('Wavenumbers (CM$^{-1}$)')
         plt.ylabel('Intencity (AU)')
@@ -806,20 +1101,37 @@ def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulm
     if print_plot == True:
         plt.show()
 
-def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,PCs_plot=(0,1),print_plot=True,return_eigenvalues=False,colours = ['k','r','b','g','m','y']):
+def plotPCAByClass(data_frame,column,spectra_ids,spetcra_ids_coulmn,principal_components=10,
+                   PCs_plot=(0,1),print_plot=True,return_eigenvalues=False,
+                   colours=['k','r','b','g','m','y'],return_axis=False,plot_labels=True):
     index = 0
     pca = PCA(n_components=principal_components)
-    X = np.stack(data_frame[str(column)])
+    X = np.stack(data_frame[str(column)])#Dont use all data!
     X_pca = pca.fit(X).transform(X)
+    indexes_total = []
     for spectra_class in spectra_ids:
         indexes = [int(x) for x in data_frame.index[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)].tolist()]
         plt.scatter(X_pca[indexes,PCs_plot[0]],X_pca[indexes,PCs_plot[1]],c=colours[index])
         index += 1
-    plt.title('PCA of Spcetra by Sample Class')
-    plt.xlabel('Principal component ' + str(PCs_plot[0]+1))
-    plt.ylabel('Principal component ' + str(PCs_plot[1]+1))
-    plt.legend(spectra_ids)
+        indexes_total.append(indexes)
+    if plot_labels == True:
+        plt.title('PCA of Spcetra by Sample Class')
+        plt.xlabel('Principal component ' + str(PCs_plot[0]+1))
+        plt.ylabel('Principal component ' + str(PCs_plot[1]+1))
+        plt.legend(spectra_ids)
     if print_plot == True:
         plt.show()
+    if return_axis == True:
+        return X_pca, indexes_total
     if return_eigenvalues == True:
         return pca
+
+def extractWavenumber(data_frame,wavenumber,column,spectra_ids,spetcra_ids_coulmn,wavenumbers):
+    X = np.stack(data_frame[str(column)])
+    WN = np.absolute(wavenumbers - wavenumber).argmin()
+    wavenumber_list_master = []
+    for spectra_class in spectra_ids:
+        indexes = [int(x) for x in data_frame.index[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)].tolist()]
+        wavenumber_list = list(X[indexes,WN])
+        wavenumber_list_master.append(wavenumber_list)
+    return wavenumber_list_master
