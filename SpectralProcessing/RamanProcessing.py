@@ -1,4 +1,5 @@
-#inport modules
+# Import modules
+
 import subprocess
 import sys
 import math
@@ -18,6 +19,9 @@ import pandas as pd
 import pprint as pp
 import pywt
 from statsmodels.robust import mad
+from BaselineRemoval import BaselineRemoval
+
+### Scipy
 
 from scipy.ndimage.interpolation import shift
 from scipy.signal import savgol_filter
@@ -81,8 +85,10 @@ from sklearn.decomposition import TruncatedSVD
 
 #from sklearn import svm
 
-from BaselineRemoval import BaselineRemoval
-warnings.filterwarnings("ignore")
+import customerrors
+
+#warnings.filterwarnings("ignore")
+
 # Define all function used in the program
 
 # Processing
@@ -217,14 +223,50 @@ def quickProcess(file_paths, sample_type, method='Basic'):
                                   'Baseline_corrected_alinged_array')
     return df
 
-def readArrayFromFile(file, sample_ID):
-    # Opens a file and reads the content into an array of spectras and corrisponding wavnumbers
-    # (can accept both single file names and lists of files)
-    if type(file) == list:
+def readArrayFromFile(file_path, sample_ID):
+    """
+    Reads the spectra from a WiER2 mapgrid file where there are four columns
+    corrisponding to X, Y, Wavenumber, Intensity. Each repeat spectra is
+    seperated into corrisponding rows in an array.
+
+    ---------
+
+    Arguments :
+
+    file_path : file path(s) to the desiered file(s). If this is in the form of
+                a list then the function will open each file on after another
+                and append the results to a single array.
+    sample_ID : takes a list of the same size as the file_path list and
+                duplicates the entrys.
+
+    ---------
+    Returns   :
+
+    WN        : a 1D array of a singel set of the wavenumbers for the
+                corrisponding spectra.
+    array     : a 2D array of the spectra contained in the supplied files.
+    sample_ID : a 1D array of equal length to the number of spectra where each
+                entry is the lable assinged to the file by the sample_ID
+                argument
+    """
+
+    if type(file_path) != list:
+        if type(file_path) != str:
+            raise FilePathTypeError(file_path)
+
+    if type(sample_ID) != list:
+        if type(sample_ID) != str:
+            raise LableTypeError(sample_ID)
+
+    if type(file_path) == list:
+        if len(file_path) != len(sample_ID):
+            raise LabelSizeMissmachError(file_path, sample_ID)
+
+    if type(file_path) == list:
         master_array = False
         master_sample_ID_list = []
         index = 0
-        for file_active in file:
+        for file_active in file_path:
             with open(file_active) as filecontent:
                 total_data = []
                 for data in filecontent:
@@ -239,8 +281,8 @@ def readArrayFromFile(file, sample_ID):
             master_sample_ID_list.extend(sample_ID_list)
             index += 1
         return wavenumbers, np.transpose(master_array), master_sample_ID_list
-    elif type(file) == str:
-        with open(file) as filecontent:
+    elif type(file_path) == str:
+        with open(file_path) as filecontent:
             total_data = []
             for data in filecontent:
                 data = data.rstrip("\n")
