@@ -226,8 +226,8 @@ def quickProcess(file_paths, sample_type, method='Basic'):
 def readArrayFromFile(file_path, sample_ID):
     """
     Reads the spectra from a WiER2 mapgrid file where there are four columns
-    corrisponding to X, Y, Wavenumber, Intensity. Each repeat spectra is
-    seperated into corrisponding rows in an array.
+    corrisponding to X, Y, Wavenumber, Intensity. Each spectra is seperated
+    into corrisponding rows in an array.
 
     ---------
 
