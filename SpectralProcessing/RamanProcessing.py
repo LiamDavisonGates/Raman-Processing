@@ -85,7 +85,7 @@ from sklearn.decomposition import TruncatedSVD
 
 #from sklearn import svm
 
-import customerrors
+from customerrors import *
 
 #warnings.filterwarnings("ignore")
 
@@ -223,33 +223,36 @@ def quickProcess(file_paths, sample_type, method='Basic'):
                                   'Baseline_corrected_alinged_array')
     return df
 
-def readArrayFromFile(file_path, sample_ID):
+def readArrayFromFile(file, sample_ID, indexing_col=-2, spectrum_col=-1):
     """
-    Reads the spectra from a WiER2 mapgrid file where there are four columns
-    corrisponding to X, Y, Wavenumber, Intensity. Each spectra is seperated
-    into corrisponding rows in an array.
+    Opens a file and reads the content into an array of spectrums and
+    corrisponding wavnumbers (can accept both single file names and lists of
+    files). Only accepts Renashaw WiER2 .txt output files.
 
-    ---------
-
-    Arguments :
-
-    file_path : file path(s) to the desiered file(s). If this is in the form of
-                a list then the function will open each file on after another
-                and append the results to a single array.
-    sample_ID : takes a list of the same size as the file_path list and
-                duplicates the entrys.
-
-    ---------
-    Returns   :
-
-    WN        : a 1D array of a singel set of the wavenumbers for the
-                corrisponding spectra.
-    array     : a 2D array of the spectra contained in the supplied files.
-    sample_ID : a 1D array of equal length to the number of spectra where each
-                entry is the lable assinged to the file by the sample_ID
-                argument
+    Parameters
+    ----------
+    file : string or list of strings
+        Filepath(s) for file(s) to be loaded.
+    sample_ID : string or list of strings
+        ID(s) for each sample.
+    indexing_col : int, default=-2
+        Specifies the colum in the array for the wavenumbers (X-axis) which is
+        used to seperat individual spectrums.
+    spectrum_col : int, default=-1
+        Specifies the colum in the array for the spectrums (Y-axis).
+    
+    Returns
+    -------
+    WN : ndarray
+        1D array of the wavenumbers (X-axis).
+    array : ndarray
+        Array of the spectrum(s) from selected file.
+    sample_ID_list : list of strings
+        List of sample ID(s) expanded out to one entry per spectrum for
+        indexing the datafram.
+    
     """
-
+    
     if type(file_path) != list:
         if type(file_path) != str:
             raise FilePathTypeError(file_path)
@@ -261,19 +264,21 @@ def readArrayFromFile(file_path, sample_ID):
     if type(file_path) == list:
         if len(file_path) != len(sample_ID):
             raise LabelSizeMissmachError(file_path, sample_ID)
-
-    if type(file_path) == list:
+    
+    if type(file) == list:
         master_array = False
         master_sample_ID_list = []
         index = 0
-        for file_active in file_path:
+        for file_active in file:
             with open(file_active) as filecontent:
                 total_data = []
                 for data in filecontent:
                     data = data.rstrip("\n")
                     data_list = data.split("\t")
                     total_data.append(data_list)
-                wavenumbers, array, sample_ID_list = splitArray(np.array(total_data).astype(np.float), sample_ID[index])
+                wavenumbers, array, sample_ID_list = splitArray(
+                    np.array(total_data).astype(np.float), sample_ID[index],
+                    indexing_col=indexing_col, spectrum_col=spectrum_col)
             if type(master_array) == np.ndarray:
                 master_array = np.hstack((master_array,array))
             else:
@@ -281,51 +286,99 @@ def readArrayFromFile(file_path, sample_ID):
             master_sample_ID_list.extend(sample_ID_list)
             index += 1
         return wavenumbers, np.transpose(master_array), master_sample_ID_list
-    elif type(file_path) == str:
-        with open(file_path) as filecontent:
+    elif type(file) == str:
+        with open(file) as filecontent:
             total_data = []
             for data in filecontent:
                 data = data.rstrip("\n")
                 data_list = data.split("\t")
                 total_data.append(data_list)
-            WN, array, sample_ID_list = splitArray(np.array(total_data).astype(np.float), sample_ID)
+            WN, array, sample_ID_list = splitArray(
+                np.array(total_data).astype(np.float), sample_ID,
+                indexing_col=indexing_col, spectrum_col=spectrum_col)
             return WN, np.transpose(array), sample_ID_list
 
-def splitArray(array, sample_ID):
-    # Format the array by the first X value (wavenumber) and splitting the array at each subsiquent
-    # mach (indication of the start of a new measurment)
-    raman_array = [np.array_split(array, x)
-                   for x in np.where(array[:,-2] == array[0,-2])]
+def splitArray(array, sample_ID, indexing_col=-2, spectrum_col=-1):
+    """
+    Format the array by the first X value (wavenumber) and splitting the array
+    at each subsequent mach (indication of the start of a new measurment).
+
+    Parameters
+    ----------
+    array : ndarray
+        Array of values from a single .txt file of the unformmated
+        spectrum(s).
+    sample_ID : string or list of strings
+        ID(s) for each sample.
+    indexing_col : int, default=-2
+        Specifies the colum in the array for the wavenumbers (X-axis) which is
+        used to seperat individual spectrums.
+    spectrum_col : int, default=-1
+        Specifies the colum in the array for the spectrums (Y-axis).
+    
+    Returns
+    -------
+    WN : ndarray
+        1D array of the wavenumbers (X-axis).
+    array : ndarray
+        Array of the spectrum(s) from single selected file.
+    sample_ID_list : list of strings
+        List of sample ID(s) expanded out to one entry per spectrum for
+        indexing datafram
+    
+    """
+    # split the array at every element matching the first for the given column
+    raman_array = [np.array_split(array, x) 
+        for x in np.where(array[:,indexing_col] == array[0,indexing_col])]
     raman_array = raman_array[0]
     del raman_array[0]
-    array = np.dstack(raman_array)[:,-1,:]
-    WN = np.dstack(raman_array)[:,-2,0]
+    # make split array 3D
+    array = np.dstack(raman_array)[:,spectrum_col,:]
+    WN = np.dstack(raman_array)[:,indexing_col,0]
+    # generat sample ID list in the same shape as array
     sample_ID_list = [sample_ID for i in range(np.shape(array)[1])]
     return WN, array, sample_ID_list
 
-def waveletSmooth( x, wavelet="db4", level=1):
+def waveletSmooth(x, wavelet="db4", level=1):
+    """
+    Proforms data smoothing using a specified wavelet.
+
+    Parameters
+    ----------
+    x : ndarray
+        Array to be smoothed.
+    wavelet : string, defalt="db4"
+        Referance code for the specified wavelet.
+    level : int, defalt=1
+        Decomposition level.
+    
+    Returns
+    -------
+    y : ndarray
+        Smoothed array.
+    
+    """
     # calculate the wavelet coefficients
-    coeff = pywt.wavedec( x, wavelet, mode="per" )
+    coeff = pywt.wavedec(x, wavelet, mode="per")
     # calculate a threshold
-    sigma = mad( coeff[-level] )
-    # changing this threshold also changes the behavior,
-    # but I have not played with this very much
-    uthresh = sigma * np.sqrt( 2*np.log( len( x ) ) )
-    coeff[1:] = ( pywt.threshold( i, value=uthresh, mode="soft" ) for i in coeff[1:] )
+    sigma = mad(coeff[-level])
+    # changing this threshold also changes the behavior
+    uthresh = sigma * np.sqrt(2*np.log(len(x)))
+    coeff[1:] = (pywt.threshold(i, value=uthresh, mode="soft") for i in coeff[1:])
     # reconstruct the signal using the thresholded coefficients
-    y = pywt.waverec( coeff, wavelet, mode="per" )
+    y = pywt.waverec( coeff, wavelet, mode="per")
     return y
 
 def speyediff(N, d, format='csc'):
     """
     (utility function)
-    Construct a d-th order sparse difference matrix based on
+    Construct a d-th order sparse difference matrix based on 
     an initial N x N identity matrix
-
+    
     Final matrix (N-d) x N
     """
-
-    assert not (d < 0), "d must be non negative"
+    
+    assert not (d < 0), 'd must be non negative'
     shape     = (N-d, N)
     diagonals = np.zeros(2*d + 1)
     diagonals[d] = 1.
@@ -342,23 +395,23 @@ def whittaker_smooth(y, lmbd, d = 2):
     Implementation of the Whittaker smoothing algorithm,
     based on the work by Eilers [1].
     [1] P. H. C. Eilers, "A perfect smoother", Anal. Chem. 2003, (75), 3631-3636
-
+    
     The larger 'lmbd', the smoother the data.
     For smoothing of a complete data series, sampled at equal intervals
     This implementation uses sparse matrices enabling high-speed processing
     of large input vectors
-
+    
     ---------
-
+    
     Arguments :
-
+    
     y       : vector containing raw data
     lmbd    : parameter for the smoothing algorithm (roughness penalty)
-    d       : order of the smoothing
-
+    d       : order of the smoothing 
+    
     ---------
     Returns :
-
+    
     z       : vector of the smoothed data.
     """
 
@@ -367,7 +420,7 @@ def whittaker_smooth(y, lmbd, d = 2):
     D = speyediff(m, d, format='csc')
     coefmat = E + lmbd * D.conj().T.dot(D)
     z = splu(coefmat).solve(y)
-    return z
+    return z    
 
 def smooth(array, method = 'Savitzky–Golay', window = 3, polynomial = 0, axis = 1, fourior_values = 3, wavelet = 'db29',
            wavelet_level = 1, lambda_val = 50000, d = 2):
@@ -451,7 +504,7 @@ def normalise(array, axis = 1, method = 'max_within_range', normalisation_indexs
             elif method == 'custom_values':
                 normalised_array[:,spectra] = array[:,spectra] / custom_values[spectra]
                 normalisation_values.append(custom_values[spectra])
-
+        
     if method == 'area':
         max_value = np.max(np.mean(normalised_array[normalisation_indexs_2[0]:normalisation_indexs_2[1],:],axis=1))
         normalised_array = normalised_array / max_value
@@ -561,7 +614,7 @@ def removeCosmicRaySpikes(array, method = 'wavenumber', threshold_diff=5, thresh
                 for wavenumber in range(np.shape(matrix)[1]-2):
                     if min_threshold > second_diff_spectrum[wavenumber] or abs(min_threshold) < second_diff_spectrum[wavenumber]:
                         removed_spikes_diff.append([wavenumber+1,spectrum,matrix[spectrum,wavenumber+1]])
-
+        
         #print(np.shape(np.array(removed_spikes_wn)))
         #print(np.shape(np.array(removed_spikes_diff)))
         mask = np.isin(np.array(removed_spikes_wn)[:,1:3],np.array(removed_spikes_diff)[:,1:3])
@@ -725,16 +778,16 @@ def moving_average(x, w):
 def WhittakerSmooth(x,w,lambda_,differences=1):
     '''
     Penalized least squares algorithm for background fitting
-
+    
     input
         x: input data (i.e. chromatogram of spectrum)
         w: binary masks (value of the mask is zero if a point belongs to peaks and one otherwise)
         lambda_: parameter that can be adjusted by user. The larger lambda is,  the smoother the resulting background
         differences: integer indicating the order of the difference of penalties
-
+    
     output
         the fitted background vector
-
+    
     https://github.com/zmzhang/airPLS/blob/master/airPLS.py
     '''
     X=np.matrix(x)
@@ -751,15 +804,15 @@ def WhittakerSmooth(x,w,lambda_,differences=1):
 def airPLS(x, lambda_=30, porder=1, itermax=15):
     '''
     Adaptive iteratively reweighted penalized least squares for baseline fitting
-
+    
     input
         x: input data (i.e. chromatogram of spectrum)
         lambda_: parameter that can be adjusted by user. The larger lambda is,  the smoother the resulting background, z
         porder: adaptive iteratively reweighted penalized least squares for baseline fitting
-
+    
     output
         the fitted background vector
-
+    
     https://github.com/zmzhang/airPLS/blob/master/airPLS.py
     '''
     m=x.shape[0]
@@ -774,7 +827,7 @@ def airPLS(x, lambda_=30, porder=1, itermax=15):
             break
         w[d>=0]=0 # d>0 means that this point is part of a peak, so its weight is set to 0 in order to ignore it
         w[d<0]=np.exp(i*np.abs(d[d<0])/dssn)
-        w[0]=np.exp(i*(d[d<0]).max()/dssn)
+        w[0]=np.exp(i*(d[d<0]).max()/dssn) 
         w[-1]=w[0]
     return z
 
@@ -805,15 +858,15 @@ def baselineCorrection(array, method = 'ALS', lam = 10**4, p = 0.01, niter = 10,
     elif method == 'FFT':
         index = 0
         for spectra in tqdm(array,desc='Baseline (FFT / ' + str(fourier_type) + ')',leave=False):
-            if fourier_type == 'DFT':
+            if fourier_type == 'DFT': 
                 rft = np.fft.fft(spectra)
                 rft[:fourier_values] = 0
                 baselined_array[index,:] = np.fft.ifft(rft)
-            elif fourier_type == 'RDFT':
+            elif fourier_type == 'RDFT': 
                 rft = np.fft.rfft(spectra)
                 rft[:fourier_values] = 0
                 baselined_array[index,:] = np.fft.irfft(rft)
-            elif fourier_type == 'Hermitian':
+            elif fourier_type == 'Hermitian': 
                 rft = np.fft.hfft(spectra)
                 rft[:fourier_values] = 0
                 baselined_array[index,:] = np.fft.ihfft(rft)
@@ -908,9 +961,9 @@ def xAling(array, alingnemt_indexes = [895,901], wavenumbers=False, pre_normalis
             interp2 = f2(np.arange(0, len(spectra)-1, 0.1))
             interp2 = np.pad(interp2, (30, 30), 'constant', constant_values=((array[0,index],array[-1,index])))
             role_list = []
-            for x in range(-30,30):
+            for x in range(-30,30):   
                 role_list.append(sum(abs(interp1N[alingnemt_indexe_1:alingnemt_indexe_2] - np.roll(interp2N, x)[alingnemt_indexe_1:alingnemt_indexe_2])))
-            aling_index = np.argmin(role_list)-30
+            aling_index = np.argmin(role_list)-30   
             aline_list.append(aling_index)
             #print(np.shape(alinged_array))
             #print(np.shape(interp2))
@@ -930,13 +983,72 @@ def xAling(array, alingnemt_indexes = [895,901], wavenumbers=False, pre_normalis
                 alinged_array[:,index] = np.roll(interp2,(max_index1-max_index2))[30:len(interp2)-30]
             else:
                 role_list = []
-                for x in range(-30,30):
+                for x in range(-30,30):   
                     role_list.append(sum(abs(interp1[alingnemt_indexe_1:alingnemt_indexe_2] - np.roll(interp2, x)[alingnemt_indexe_1:alingnemt_indexe_2])))
-                aling_index = np.argmin(role_list)-30
+                aling_index = np.argmin(role_list)-30   
                 aline_list.append(aling_index)
                 alinged_array[:,index] = np.roll(interp2,aling_index)[30:len(interp2)-30]
             index += 1
     return alinged_array
+
+def xAlingBySample(data_frame, column, spectra_ids, spetcra_ids_coulmn, alingnemt_indexes = [895,901], wavenumbers=False, pre_normalise=False, aling_to_max=True):
+    
+    final_alinged_array = []
+    
+    alingnemt_indexes_2 = alingnemt_indexes
+    if type(wavenumbers) == np.ndarray:
+        alingnemt_indexes_2[0] = np.absolute(wavenumbers - alingnemt_indexes[0]).argmin()
+        alingnemt_indexes_2[1] = np.absolute(wavenumbers - alingnemt_indexes[1]).argmin()
+        alingnemt_indexes_2 = sorted(alingnemt_indexes_2)
+        alingnemt_indexe_1 = (alingnemt_indexes_2[0] * 10) + 30
+        alingnemt_indexe_2 = (alingnemt_indexes_2[1] * 10) + 30
+    else:
+        alingnemt_indexe_1 = alingnemt_indexes[0] * 10
+        alingnemt_indexe_2 = alingnemt_indexes[1] * 10
+            
+    for spectra_class in spectra_ids:
+        array = np.stack(data_frame[data_frame[str(spetcra_ids_coulmn)] == str(spectra_class)][column])
+        array = array.T
+        #print('Array Shape')
+        #print(np.shape(array))
+        alinged_array = np.zeros(np.shape(array))
+        
+        aline_list = []
+        
+        index = 0
+        copied_array = copy.deepcopy(array)
+        
+        f = interpolate.interp1d(range(len(array[:,0])), np.mean(array,axis=1), kind='quadratic')
+        interp1 = f(np.arange(0, len(array[:,0])-1, 0.1))
+        interp1 = np.pad(interp1, (30, 30), 'constant', constant_values=((np.mean(array,axis=1)[0],np.mean(array,axis=1)[-1])))
+
+        alinged_array = np.zeros((len(interp1[30:len(interp1)-30]),np.shape(array)[1]))
+    
+        for spectra in tqdm(np.transpose(array),desc='X Aling',leave=False):
+            #plt.plot(spectra)
+            #plt.show()
+            f = interpolate.interp1d(range(len(spectra)), spectra, kind='quadratic')
+            interp2 = f(np.arange(0, len(spectra)-1, 0.1))
+            interp2 = np.pad(interp2, (30, 30), 'constant', constant_values=((spectra[0],spectra[-1])))
+            #print(str(np.argmax(interp1[alingnemt_indexe_1:alingnemt_indexe_2])) + ':' + str(np.argmax(interp2[alingnemt_indexe_1:alingnemt_indexe_2])))
+            if aling_to_max == True:
+                #print(alingnemt_indexe_1)
+                #print(alingnemt_indexe_2)
+                #plt.plot(interp2[alingnemt_indexe_1:alingnemt_indexe_2])
+                #plt.show()
+                max_index1 = np.argmax(interp1[alingnemt_indexe_1:alingnemt_indexe_2])
+                max_index2 = np.argmax(interp2[alingnemt_indexe_1:alingnemt_indexe_2])
+                alinged_array[:,index] = np.roll(interp2,(max_index1-max_index2))[30:len(interp2)-30]
+            else:
+                role_list = []
+                for x in range(-30,30):   
+                    role_list.append(sum(abs(interp1[alingnemt_indexe_1:alingnemt_indexe_2] - np.roll(interp2, x)[alingnemt_indexe_1:alingnemt_indexe_2])))
+                aling_index = np.argmin(role_list)-30   
+                aline_list.append(aling_index)
+                alinged_array[:,index] = np.roll(interp2,aling_index)[30:len(interp2)-30]
+            index += 1
+        final_alinged_array.append(alinged_array)
+    return np.hstack(final_alinged_array)
 
 def vectorInterp(WN,kind='linear'):
     f = interpolate.interp1d(range(len(WN)), WN, kind=kind)
@@ -1073,7 +1185,7 @@ def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_s
                 except:
                     Sigan_to_noise_ratio = None
                 SNR[columnName] = Sigan_to_noise_ratio
-
+    
     if display == True:
         if subsample == True:
             mean_dict = {}
@@ -1109,8 +1221,8 @@ def signalToNoiseOfDataframe(dataframe, scale=True, subsample=False, subsample_s
             if columnData != None:
                 SNR_dict[columnName] = columnData
         return SNR_dict
-
-
+    
+    
 def prediction(classifier, X_test, y_test):
     count = 0
     correct = 0
@@ -1146,9 +1258,9 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
                     'nsvm' :  [],
                     'knnu' :  [],
                     'knnd' :  []}
-
+    
     array = np.stack(array)
-
+    
     if decomposition == False:
         X = array
         y = classifier_lables
@@ -1199,7 +1311,7 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
         X = array
         y = classifier_lables
         kpca = KernelPCA(n_components=number_of_components)
-        kpca.fit(X_train)
+        kpca.fit(X)
         X_train = kpca.transform(X)
     elif decomposition == 'LDAL':
         X = array
@@ -1225,7 +1337,7 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
         dl = DictionaryLearning(n_components=number_of_components)
         dl.fit(X)
         X_train = dl.transform(X)
-
+    
     lgr = LogisticRegression()
     lgr.fit(X_train, y)
     rcc = RidgeClassifierCV()
@@ -1238,7 +1350,7 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
     lsvm.fit(X_train, y)
     nsvm = NuSVC()
     nsvm.fit(X_train, y)
-    ann = MLPClassifier(hidden_layer_sizes=(50,50),activation='relu',learning_rate='adaptive',max_iter=10000)
+    ann = MLPClassifier(hidden_layer_sizes=(100,),activation='relu',learning_rate='adaptive',max_iter=10000)
     ann.fit(X_train, y)
     #brbm = BernoulliRBM()
     #brbm.fit(X_train, y)
@@ -1265,7 +1377,7 @@ def applyMachineLearingPredictors(array,classifier_lables,decomposition=False,nu
     knnu =  neighbors.KNeighborsClassifier(30, weights='uniform')
     knnu.fit(X_train, y)
     knnd =  neighbors.KNeighborsClassifier(30, weights='distance')
-    knnd.fit(X_train, y)
+    knnd.fit(X_train, y) 
 
     for key in tqdm(correct.keys(), desc='Cross-Validating Models', leave=False):
         correct[key] = cross_val_score(eval(key), X_train, y, cv=CV, n_jobs=-1)
@@ -1322,7 +1434,7 @@ def plotSpectraByClass(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,p
     plotinbg_handel.autoscale(enable=True, axis='x', tight=True)
     if print_plot == True:
         plt.show()
-
+    
 def plotDifferenceSpectra(data_frame,x_axis,column,spectra_ids,spetcra_ids_coulmn,
                           print_plot=True, offset=0, colour=['k'], plot_labels=True,
                           linewidth=1,axis_object=False, return_spectrum=False,
